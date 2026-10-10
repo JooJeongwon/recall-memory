@@ -36,6 +36,11 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     const session = signedIn.data.session!;
     expect((await server.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token })).error).toBeNull();
     await page.context().addCookies([...cookies].map(([name, value]) => ({ name, value, url: "http://localhost:3000" })));
+    let storageTokenQueries = 0;
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith("/storage/v1/object/") && url.searchParams.has("token")) storageTokenQueries++;
+    });
 
     await page.goto("/settings");
     const consent = page.getByRole("checkbox", { name: "사용 행동 분석에 동의" });
@@ -92,8 +97,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     await expect(page.getByText("spoofed.jpg: JPEG·PNG·정적 WebP 사진을 선택해주세요.")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("broken.png: JPEG·PNG·정적 WebP 사진을 선택해주세요.")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("too-many-pixels.png: 사진 크기 제한을 초과했어요.")).toBeVisible({ timeout: 30_000 });
-    const rejectedPhotos = await admin.from("photos").select("original_name,lifecycle").eq("user_id", userId)
-      .in("original_name", ["spoofed.jpg", "broken.png", "too-many-pixels.png"]);
+    const rejectedPhotos = await admin.from("photos").select("lifecycle").eq("user_id", userId).eq("lifecycle", "deleting");
     expect(rejectedPhotos.error).toBeNull();
     expect(rejectedPhotos.data).toHaveLength(3);
     expect(rejectedPhotos.data?.every(({ lifecycle }) => lifecycle === "deleting")).toBe(true);
@@ -105,12 +109,12 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
       { name: "synthetic.png", mimeType: "image/png", buffer: original },
       { name: "synthetic-extra.jpg", mimeType: "image/jpeg", buffer: secondPhoto },
     ]);
-    const uploadRoute = /\/storage\/v1\/object\/upload\/sign\//;
+    const uploadRoute = /\/storage\/v1\/object\/memory-assets\/[^/]+\/[^/]+\/original\./;
     let uploadAttempts = 0;
     let failSecondUpload = true;
     await page.route(uploadRoute, async (route) => {
-      if (route.request().method() === "PUT") uploadAttempts++;
-      if (route.request().method() === "PUT" && uploadAttempts === 2 && failSecondUpload) {
+      if (route.request().method() === "POST") uploadAttempts++;
+      if (route.request().method() === "POST" && uploadAttempts === 2 && failSecondUpload) {
         failSecondUpload = false;
         await new Promise((resolve) => setTimeout(resolve, 500));
         await route.abort("connectionreset");
@@ -126,7 +130,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     await retryUpload.click();
     await expect(page.getByText("synthetic-extra.jpg: 사진을 추가했어요")).toBeVisible({ timeout: 30_000 });
     const orientedPhoto = await admin.from("photos").select("thumbnail_key").eq("user_id", userId)
-      .eq("original_name", "synthetic-extra.jpg").single();
+      .eq("mime_type", "image/jpeg").eq("lifecycle", "ready").single();
     expect(orientedPhoto.error).toBeNull();
     const orientedThumbnail = await admin.storage.from(policy.bucket).download(orientedPhoto.data!.thumbnail_key!);
     expect(orientedThumbnail.error).toBeNull();
@@ -168,7 +172,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     });
 
     const currentPhoto = await admin.from("photos").select("id,version").eq("user_id", userId)
-      .eq("original_name", "synthetic.png").single();
+      .eq("mime_type", "image/png").eq("lifecycle", "ready").single();
     expect(currentPhoto.error).toBeNull();
     const consentedEvents = await admin.from("events").select("name").eq("user_id", userId).eq("photo_id", currentPhoto.data!.id);
     expect(consentedEvents.error).toBeNull();
@@ -229,23 +233,30 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     page.on("request", (request) => {
       if (exportRoute.test(new URL(request.url()).pathname) && request.method() === "GET") exportPreparations++;
     });
-    let failExpiredUrlOnce = true;
-    await page.route(exportRoute, async (route) => {
-      if (failExpiredUrlOnce) {
-        failExpiredUrlOnce = false;
-        const response = await route.fetch();
-        const data = await response.json();
-        const expiredUrl = new URL(data.url);
-        expiredUrl.searchParams.set("token", "expired");
-        await route.fulfill({ response, body: JSON.stringify({ ...data, url: expiredUrl.toString() }) });
+    const originalAssetRoute = /\/api\/photos\/[^/]+\/asset\?kind=original(?:&|$)/;
+    let originalAssetRequests = 0;
+    let failDownloadOnce = true;
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.endsWith("/asset") && url.searchParams.get("kind") === "original") originalAssetRequests++;
+    });
+    await page.route(originalAssetRoute, async (route) => {
+      if (failDownloadOnce) {
+        failDownloadOnce = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
       } else await route.continue();
     });
     const exportButton = page.getByRole("button", { name: "사진과 메모 가져가기" });
-    await exportButton.click();
+    const [exportResponse] = await Promise.all([
+      page.waitForResponse((response) => exportRoute.test(new URL(response.url()).pathname)),
+      exportButton.click(),
+    ]);
+    expect(await exportResponse.json()).not.toHaveProperty("url");
     await expect(page.getByRole("status").filter({ hasText: "사진을 가져오지 못했어요. 다시 시도해주세요." })).toBeVisible();
     await expect(exportButton).toBeEnabled();
     expect(exportPreparations).toBe(1);
-    await page.unroute(exportRoute);
+    expect(originalAssetRequests).toBe(1);
+    await page.unroute(originalAssetRoute);
     const [updatedDownload] = await Promise.all([
       page.waitForEvent("download"),
       exportButton.click(),
@@ -277,6 +288,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     await page.goto(`/photos/${currentPhoto.data!.id}`);
     await expect(page.getByRole("img", { name: "선택한 기억 사진" })).toBeVisible();
     await laterEvent;
+    expect(storageTokenQueries).toBe(0);
     expect((await admin.from("events").select("id").eq("user_id", userId)).data).toEqual([]);
 
     page.once("dialog", (dialog) => {

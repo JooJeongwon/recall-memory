@@ -15,9 +15,8 @@ export function PhotoView({ id, detail = false }: { id: string; detail?: boolean
     let active = true;
     async function load() {
       try {
-        const [data, asset] = await Promise.all([requestApi(`/api/photos/${id}`),
-          requestApi<{ url: string }>(`/api/photos/${id}/asset?kind=thumbnail`)]);
-        if (active) { setPhoto(photoSchema.parse(data)); setUrl(asset.url); setMessage(""); }
+        const data = await requestApi(`/api/photos/${id}`);
+        if (active) { setPhoto(photoSchema.parse(data)); setUrl(`/api/photos/${id}/asset?kind=thumbnail&retry=${retry}`); setMessage(""); }
       } catch (error) { if (active) setMessage(error instanceof Error ? error.message : "다시 시도해주세요."); }
     }
     void load(); return () => { active = false; };
@@ -26,7 +25,7 @@ export function PhotoView({ id, detail = false }: { id: string; detail?: boolean
     {photo && url ? <>
       {/* 비공개 URL을 Next 이미지 최적화 캐시에 넣지 않습니다. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="photo" src={url} alt="선택한 기억 사진" onError={() => setMessage("사진 접근 시간이 끝났어요. 다시 불러와주세요.")}
+      <img className="photo" src={url} alt="선택한 기억 사진" onError={() => setMessage("사진을 불러오지 못했어요. 다시 시도해주세요.")}
         onLoad={() => {
           if (!detail) void requestApi(`/api/photos/${id}/view`, { method: "POST" }).catch(() => {});
           void requestApi("/api/events", { method: "POST", body: JSON.stringify({

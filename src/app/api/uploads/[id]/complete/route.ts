@@ -9,5 +9,3 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return json(await completeUpload(id));
   })(request);
 }
-
-\n

@@ -13,15 +13,9 @@ const reservation = z.object({ id: z.uuid(), original_key: z.string(), mime_type
 
 export async function reserveUploads(input: z.infer<typeof uploadInput>) {
   const photos = z.array(reservation).parse(await rpc("reserve_uploads", { p_files: input.files }));
-  const admin = adminClient();
-  const reservations = [];
-  for (const photo of photos) {
-    if (photo.lifecycle === "ready") { reservations.push({ id: photo.id, client_request_id: photo.client_request_id, already_ready: true }); continue; }
-    const { data, error } = await admin.storage.from(policy.bucket).createSignedUploadUrl(photo.original_key, { upsert: false });
-    if (error || !data) throw new ApiError(503, "TEMPORARY_FAILURE");
-    reservations.push({ id: photo.id, client_request_id: photo.client_request_id, path: photo.original_key, token: data.token, already_ready: false });
-  }
-  return { reservations };
+  return { reservations: photos.map((photo) => photo.lifecycle === "ready"
+    ? { id: photo.id, client_request_id: photo.client_request_id, already_ready: true }
+    : { id: photo.id, client_request_id: photo.client_request_id, path: photo.original_key, already_ready: false }) };
 }
 export async function completeUpload(id: string) {
   z.uuid().parse(id);

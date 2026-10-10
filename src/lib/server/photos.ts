@@ -56,10 +56,10 @@ export async function listPhotos(url: URL) {
     time: last[field], id: last.id, scope,
   })).toString("base64url") : null };
 }
-export async function asset(id: string, kind: "original" | "thumbnail") {
+export async function downloadAsset(id: string, kind: "original" | "thumbnail") {
   const { supabase, photo, originalKey, thumbnailKey } = await readPhoto(id);
   const { data, error } = await supabase.storage.from(policy.bucket)
-    .createSignedUrl(kind === "original" ? originalKey : thumbnailKey, policy.assetTtl);
+    .download(kind === "original" ? originalKey : thumbnailKey, {}, { cache: "no-store" });
   if (error || !data) throw new ApiError(503, "TEMPORARY_FAILURE");
-  return { photo, url: data.signedUrl, expires_at: new Date(Date.now() + policy.assetTtl * 1000).toISOString() };
+  return { photo, data };
 }

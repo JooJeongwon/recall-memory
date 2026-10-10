@@ -7,7 +7,6 @@ export const policy = {
   maxBytes: 10 * 1024 * 1024,
   maxPixels: 40_000_000,
   noteLength: 500,
-  assetTtl: 300,
   reservationHours: 24,
 } as const;
 

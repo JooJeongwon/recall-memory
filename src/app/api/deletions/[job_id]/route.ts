@@ -8,6 +8,3 @@ export async function GET(request: Request, context: { params: Promise<{ job_id:
     return json(await deletionStatus(request, job_id));
   })(request);
 }
-
-
-\n

@@ -13,8 +13,8 @@ flowchart TD
     App --> Auth
     App --> DB["PostgreSQL 메모와 상태"]
     App --> Storage["비공개 사진 Storage"]
-    Browser -->|"예약된 파일 업로드"| Storage
-    Browser -->|"만료 URL로 사진 조회"| Storage
+    Browser -->|"세션으로 예약 파일 업로드"| Storage
+    App -->|"세션 권한 확인 후 이미지 스트리밍"| Browser
     Cron["Cron 유지관리"] --> Worker["Edge Function 삭제와 복구"]
     Worker --> DB
     Worker --> Storage
@@ -35,9 +35,9 @@ flowchart TD
 
 웹앱은 Next.js App Router·TypeScript, DB·Auth·파일은 Supabase를 기본으로 한다. Node.js Route Handlers에서 이미지 디코딩·썸네일 생성을 수행한다. Sharp 등 선택한 이미지 라이브러리와 호스팅의 Node.js 지원을 초기 배포에서 확인한다.
 
-파일은 브라우저에서 Storage로 직접 올려 웹앱 호스팅의 요청 본문 제한을 피한다. 업로드 확정 API는 파일 자체가 아니라 업로드 ID를 받는다. 서버가 Storage의 파일을 읽어 검증한 후 `ready`로 확정한다.
+파일은 브라우저에서 사용자 세션으로 Storage에 직접 올려 웹앱 호스팅의 요청 본문 제한을 피한다. Storage RLS는 활성 사용자 소유의 미완료 예약 객체에만 업로드를 허용한다. 업로드 확정 API는 파일 자체가 아니라 업로드 ID를 받는다. 서버가 Storage의 파일을 읽어 검증한 후 `ready`로 확정한다.
 
-내보내기는 브라우저가 만료 URL로 원본을 받아 ZIP을 만든다. 서버가 대용량 ZIP을 HTTP 응답 본문으로 반환하지 않는다. 첫 MVP는 파일당 10 MiB와 개별 내보내기로 메모리 사용을 제한한다.
+사진 조회와 내보내기는 같은 출처의 인증 API를 통해 본인 파일을 스트리밍한다. 브라우저는 원본을 받아 ZIP을 만들며 서버가 ZIP을 HTTP 응답 본문으로 반환하지 않는다. 첫 MVP는 파일당 10 MiB와 개별 내보내기로 메모리 사용을 제한한다.
 
 SSR 세션은 `@supabase/ssr` 공식 가이드를 따른다. 사용자별 서버 클라이언트는 요청마다 만들며 요청 간 공유하지 않는다. 선택한 Next.js 버전에 맞춰 `proxy.ts` 또는 `middleware.ts`를 사용한다.
 
@@ -202,10 +202,10 @@ UNIQUE 제약으로 이미 생긴 인덱스는 중복 생성하지 않는다. �
 
 | 동작 | 주체·권한 |
 | --- | --- |
-| 업로드 예약·업로드 URL 발급 | 검증된 사용자 요청을 받은 서버 |
-| 원본 PUT | 발급받은 예약 URL을 가진 브라우저, 예약 객체 하나만 |
+| 업로드 예약 | 검증된 사용자 요청을 받은 서버 |
+| 원본 PUT | 예약 객체에 대한 사용자 세션과 Storage RLS |
 | 썸네일 생성·파일 삭제 | 서버 또는 유지관리 함수의 비밀 키 |
-| 정상 사진 SELECT·조회 URL 발급 | 본인 세션, `ready` 행·활성 계정만 |
+| 정상 사진 SELECT·다운로드 | 본인 세션, `ready` 행·활성 계정만 |
 | DB 직접 변경·직접 삭제 | 일반 브라우저 사용자에게 허용하지 않음 |
 
 Storage SELECT 정책은 경로의 사용자 ID뿐 아니라 해당 `photos`의 소유자, 객체 키, `ready` 상태와 활성 계정까지 확인한다. 업로드 중인 파일과 삭제 요청 파일이 목록·다운로드에 노출되지 않게 한다.
@@ -214,7 +214,7 @@ Storage SELECT 정책은 경로의 사용자 ID뿐 아니라 해당 `photos`의 
 
 서버 변경 함수는 `SECURITY INVOKER`로 만들고 EXECUTE를 PUBLIC·anon·authenticated에서 회수한 뒤 서버 역할에만 허용한다. 서버 역할은 RLS를 우회하므로 함수가 전달받은 검증된 사용자 ID로 소유권을 다시 검사해야 한다. 임의 `user_id`를 요청 본문에서 받지 않는다.
 
-정상 조회용 서명 URL 기본 수명은 300초다. 데이터베이스에는 URL 대신 객체 키만 저장한다. 만료 URL이 필요하면 재발급한다. 이미 발급한 URL은 세션 로그아웃만으로 즉시 무효화된다고 약속하지 않는다. 삭제 요청 후에는 새 URL을 발급하지 않고 실제 객체 삭제와 짧은 TTL로 노출 시간을 제한한다.
+브라우저에는 Storage 서명 URL이나 업로드 token을 반환하지 않는다. 조회는 먼저 사용자 세션으로 사진 소유권·`ready` 상태를 확인한 뒤 Storage에서 읽어 같은 출처의 `private, no-store` API 응답으로 돌려준다. 예약 업로드는 비공개 버킷의 INSERT RLS가 활성 계정·소유자·예약 키·업로드 기한·실험 기간을 확인한다. 삭제 요청은 새 API 조회를 즉시 막고 유지관리 작업이 실제 객체를 제거한다.
 
 ## 6. 상태와 기간 규칙
 
@@ -248,7 +248,7 @@ stateDiagram-v2
 1. 브라우저에서 지원 형식과 표시 크기를 먼저 검사한다. `accept`는 사용성 힌트다.
 2. `POST /api/uploads`가 계정 상태, 실험 상태, 슬롯·크기를 검증한다.
 3. DB 함수가 사용자 실험 행을 잠그고 계정의 비삭제 사진·예약이 20장 이내인지 확인한다. 한 번의 선택은 최대 10장이다.
-4. `photos`에 `uploading` 예약을 만들고 고정된 원본 객체 키의 업로드 URL을 발급한다.
+4. `photos`에 `uploading` 예약을 만들고 고정된 원본 객체 키를 반환한다. Storage INSERT RLS가 예약된 소유자 path인지 확인한다.
 5. 브라우저가 원본을 Storage에 업로드한다. 파일별 실패·재시도 상태를 보여 준다.
 6. `POST /api/uploads/[id]/complete`가 실제 객체를 읽어 크기·형식·정상 디코딩을 검사한다. 최대 원본 10 MiB, 최대 4천만 픽셀을 기본으로 한다.
 7. 서버가 방향을 바로잡은 긴 변 1280px 이하 WebP 썸네일을 만들고 EXIF를 제거한다. 원본 바이트는 변경하지 않는다.
@@ -284,14 +284,14 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 | 메서드·경로 | 입력·동작 | 정상 응답 |
 | --- | --- | --- |
 | `GET /api/me` | 계정·실험 조회 | 실험 시각, 서버 시각, 허용 동작 |
-| `POST /api/uploads` | 파일명·MIME·크기·client_request_id 목록 | 파일별 예약 ID·객체 path·서명 업로드 token, 201; SDK로 직접 전송 |
+| `POST /api/uploads` | 파일명·MIME·크기·client_request_id 목록 | 파일별 예약 ID·객체 path, 201; 브라우저가 사용자 세션으로 SDK 직접 전송 |
 | `POST /api/uploads/[id]/complete` | 예약 파일 검증·확정 | 사진 상태·실험 시각, 200 |
 | `GET /api/photos` | cursor, limit, `all / preserved` | 본인 정상 사진 목록, 200 |
 | `GET /api/photos/[id]` | 상세 조회 | 메모·버전·보관 시각, 200 |
 | `POST /api/photos/[id]/view` | 실제 다시 보기 화면에 사진이 나타난 뒤 호출 | 최초 조회 시각 기록, 204 |
-| `GET /api/photos/[id]/asset` | `original / thumbnail` | 본인 파일의 만료 URL·expires_at, 200 |
+| `GET /api/photos/[id]/asset` | `original / thumbnail` | 본인 파일의 바이너리 스트림, `private, no-store`, 200 |
 | `PUT /api/photos/[id]/note` | 메모·expected_version·request_id | 저장 결과, 200 |
-| `GET /api/photos/[id]/export` | 내보내기 준비 | 원본 만료 URL·파일명·memory.json 데이터, 200 |
+| `GET /api/photos/[id]/export` | 내보내기 준비 | ZIP 파일명·`memory.json` 데이터; 원본은 asset API에서 별도 수신, 200 |
 | `DELETE /api/photos/[id]` | 명시적 삭제 요청 | 삭제 작업 ID·상태, 202 |
 | `POST /api/events` | 허용 이벤트·client_event_id | 동의 여부에 따라 기록 또는 무기록, 204 |
 | `PATCH /api/me/preferences` | 분석 동의·타임존 | 현재 설정, 200 |
@@ -342,7 +342,7 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 
 ### 10.1 개별 내보내기
 
-서버는 본인 소유 정상 파일과 메모를 읽어 원본 URL과 JSON을 반환한다. 브라우저는 원본을 가져오고 JSZip 등 고정 버전 라이브러리로 아래 ZIP을 만든다.
+서버는 본인 소유 정상 파일과 메모를 확인해 ZIP 파일명·JSON을 반환한다. 브라우저는 본인 세션의 asset API에서 원본을 가져오고 고정 버전 라이브러리로 아래 ZIP을 만든다. Storage 서명 URL·token은 브라우저나 내보내기 API에 전달하지 않는다.
 
 | ZIP 내부 파일 | 내용 |
 | --- | --- |
@@ -395,7 +395,7 @@ Cron은 10분마다 유지관리 함수를 호출하는 기본안이다. 호출 
 
 위 제한 설정의 이름은 논리적 설정 이름이다. 이번 초기 구현은 런타임 환경변수로 제한을 조절하지 않고 `src/lib/config.ts`와 서버 전용 `public.app_policy()`에 기본값을 고정한다. `.env.example`에는 개발 프로젝트 ID·URL·키·APP_BASE_URL·유지관리 비밀·전용 개발 통합 검증 연결 이름만 둔다. 통합 테스트는 `INTEGRATION_SUPABASE_PROJECT_ID`와 HTTPS URL이 정확히 일치하는 개발 프로젝트만 대상으로 하며 운영 데이터를 사용하지 않는다. 통합 검증에서 두 정책이 같은지 확인하며 값 변경 시 새 migration과 TypeScript 설정을 함께 수정한다. 제한값을 요청 본문으로 받아 DB에 전달하지 않는다. Auth 콜백은 허용 주소로만 이동한다.
 
-운영 로그에는 request ID, API 종류, 처리 시간, 오류 코드, 작업 상태만 남긴다. 메모·파일명·서명 URL·OTP·토큰은 제외한다. 분석 이벤트는 동의 설정과 연동하며 개인 사진을 운영자가 열어 보는 관리 화면은 MVP에 만들지 않는다.
+앱이 직접 관리하는 운영 로그에는 request ID, API 종류, 처리 시간, 오류 코드, 작업 상태만 남긴다. 메모·파일명·서명 URL·OTP·token은 제외한다. 호스팅·Auth·Storage 제공자의 managed logs는 별도 보존·접근 정책을 검토한다. 2026년 10월 개발 프로젝트의 managed log에는 계정 식별자·IP·요청 경로 메타데이터가 포함된다. 분석 이벤트는 동의 설정과 연동하며 개인 사진을 운영자가 열어 보는 관리 화면은 MVP에 만들지 않는다.
 
 MVP 출시 전에 파일 저장량·전송량·삭제 작업 실패 수를 확인할 수 있게 한다. 계정당 원본은 최대 약 200 MiB이며 썸네일·전송량·유예 중 파일은 추가 비용이다. 비용 때문에 정상 보관 사진을 몰래 삭제하지 않는다.
 
@@ -427,7 +427,7 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 - [Supabase SSR 클라이언트](https://supabase.com/docs/guides/auth/server-side/creating-a-client?queryGroups=framework&framework=nextjs): 쿠키 세션·클라이언트 분리·검증·캐시 주의.
 - [Supabase Storage 버킷](https://supabase.com/docs/guides/storage/buckets/fundamentals): 비공개 버킷과 제한된 접근.
 - [Storage 접근 제어](https://supabase.com/docs/guides/storage/security/access-control): Storage RLS.
-- [Storage 파일 제공](https://supabase.com/docs/guides/storage/serving/downloads): 인증 다운로드·만료 URL.
+- [Storage 파일 제공](https://supabase.com/docs/guides/storage/serving/downloads): 비공개 파일 인증 다운로드.
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security): 소유권 정책과 인덱스.
 - [Supabase 새 테이블 API 노출 변경](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically): 새 테이블의 명시적 GRANT 확인.
 - [Supabase Changelog](https://supabase.com/changelog): 구현 시 관련 변경 점검.
@@ -439,7 +439,7 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 
 ## 15. 초기 구현 상태
 
-Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 버전을 공식 자료에서 확인하고 `package.json`에 고정했다. CSS는 별도 UI 라이브러리 없이 모바일 우선으로 작성했다. 메모 편집기는 다시 보기와 상세에서 공유한다. 서버는 `getUser()`로 검증하며 일반 사진 조회·서명 URL 발급은 사용자 세션과 RLS를 사용한다.
+Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 버전을 공식 자료에서 확인하고 `package.json`에 고정했다. CSS는 별도 UI 라이브러리 없이 모바일 우선으로 작성했다. 메모 편집기는 다시 보기와 상세에서 공유한다. 서버는 `getUser()`로 검증하며 브라우저 사진 접근은 사용자 세션·RLS·같은 출처의 스트리밍 API를 사용한다.
 
 5개 테이블·제약·인덱스·최소 GRANT·RLS·비공개 버킷·서버 전용 SECURITY INVOKER 함수의 원본 SQL을 작성했다. profile → trial → photo 순서로 잠그며 메모 수정과 삭제를 직렬화한다. 검증 실패·만료 경계의 업로드 정리는 DB 결과로 커밋하여 예외 롤백 때문에 정리 요청이 사라지지 않게 했다. 네트워크 오류는 업로드 lease를 반환하고 재시도를 허용한다.
 
@@ -451,4 +451,4 @@ Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 �
 
 `.env.local`에는 개발 프로젝트 ID·URL·공개 키·서버 키를 설정했다. 원격 통합 테스트에서 두 사용자 Auth 세션, RLS 행 분리, 직접 테이블 쓰기 및 서버 전용 함수 차단, 업로드 재요청 중복 방지와 20장 한도, 첫 사진 확정 시 실험 시각 설정, 메모 첫 공백 거절·500자 저장·501자 거절, 실험 내·외 최초 메모 시각 구분이 통과했다. 모바일 E2E에서 분석 동의 저장, 철회 시 기존 이벤트 삭제와 이후 이벤트 미기록, 보관 사진 삭제 요청·숨김, 계정 삭제 진행 토큰과 대기 UI를 확인했다. 별도 원격 합성 사진 통합 테스트에서 삭제 큐 중복 방지, 작업 claim, Storage API로 원본·썸네일 제거, 완료 RPC의 사진 개인정보 정리와 작업 완료를 확인했다. 실패 결과의 재시도 상태·이전 lease 거절·새 lease 재claim도 검증했다. 유지관리 함수는 개발 프로젝트에 배포했고 인증 없는 요청이 401로 거절됨을 확인했다. 2026년 10월 10일 `pg_cron`·`pg_net` 확장은 활성화했으나 내부 호출 비밀과 Cron 일정은 설정하지 않아 자동 삭제와 계정 전체 DB/Auth 제거는 검증하지 않았다. 빈 목록 복구·HEIC/10 MiB 초과 사전 거절·Storage 전송 실패 후 재시도·두 사진 탐색도 확인했다. MIME 위장 JPEG·손상 PNG·40,008,000픽셀 PNG의 서버 확정 거절·목록 제외도 검증했다. 이미지 검증 단위 테스트도 10 MiB 바이트 한도를 확인했다. 방향 6인 합성 JPEG로 방향 보정 WebP 썸네일과 EXIF 제거를 검증했다. 동시 수정 E2E에서는 최신 메모 표시와 사용자 초안 보존·재저장을 확인했고, 일시 저장 실패 뒤 입력·기존 DB 내용을 유지해 재시도하는 흐름도 통과했다. DB 시간 fixture 만료 테스트에서 신규 예약·만료 후 확정 거절, 기존 ready 사진의 메모 수정·원본 접근을 확인했고, 브라우저 E2E로 만료 후 ZIP 반출까지 확인했다. 서버 키가 브라우저 정적 번들에 포함되지 않는 것도 운영 빌드 결과에서 확인했다.
 
-로그인 화면은 Supabase `signInWithOAuth({ provider: "google" })`로 Google 인증을 시작하고 `/auth/confirm`에서 PKCE code를 세션으로 교환한다. Google OAuth Web client를 만들고 Supabase Auth의 Google provider에 Client ID·Secret을 설정해야 실제 로그인이 된다. Google Console의 승인된 callback은 `https://mgedpimvznbatmipaacn.supabase.co/auth/v1/callback`, 앱 redirect allowlist에는 `http://localhost:3000/auth/confirm`과 `http://127.0.0.1:3000/auth/confirm`이 필요하다. Client Secret은 Supabase 설정에만 두고 앱 환경변수나 저장소에 넣지 않는다. 동일한 검증 이메일로 Google 로그인하면 Supabase Auth가 기존 계정에 identity를 자동 연결한다 ([identity linking](https://supabase.com/docs/guides/auth/auth-identity-linking)). 현재 개발 프로젝트의 Google provider는 꺼져 있으며(`external.google=false`), Provider 설정과 실제 Google 로그인, 48시간 뒤 로그아웃·재로그인은 아직 검증하지 않았다. 브라우저 E2E는 합성 세션으로 사진 보존·ZIP 반출과 무효화된 서명 URL 실패 후 재시도까지 통과했다. API의 JSON 결과는 Zod 계약으로 검증한다. 전체 사용자 흐름이나 MVP 완료를 의미하지 않는다.
+로그인 화면은 Supabase `signInWithOAuth({ provider: "google" })`로 Google 인증을 시작하고 `/auth/confirm`에서 PKCE code를 세션으로 교환한다. Google OAuth Web client를 만들고 Supabase Auth의 Google provider에 Client ID·Secret을 설정해야 실제 로그인이 된다. Google Console의 승인된 callback은 `https://mgedpimvznbatmipaacn.supabase.co/auth/v1/callback`, 앱 redirect allowlist에는 `http://localhost:3000/auth/confirm`과 `http://127.0.0.1:3000/auth/confirm`이 필요하다. Client Secret은 Supabase 설정에만 두고 앱 환경변수나 저장소에 넣지 않는다. 동일한 검증 이메일로 Google 로그인하면 Supabase Auth가 기존 계정에 identity를 자동 연결한다 ([identity linking](https://supabase.com/docs/guides/auth/auth-identity-linking)). 현재 개발 프로젝트의 Google provider는 꺼져 있으며(`external.google=false`), Provider 설정과 실제 Google 로그인, 48시간 뒤 로그아웃·재로그인은 아직 검증하지 않았다. 브라우저 E2E는 합성 세션으로 사진 보존·ZIP 반출과 asset API 실패 후 재시도까지 통과했다. API의 JSON 결과는 Zod 계약으로 검증한다. 전체 사용자 흐름이나 MVP 완료를 의미하지 않는다.

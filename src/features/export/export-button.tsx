@@ -9,8 +9,8 @@ export function ExportButton({ id }: { id: string }) {
   async function download() {
     setBusy(true); setMessage("");
     try {
-      const data = await requestApi<{ url: string; original_filename: string; memory: unknown }>(`/api/photos/${id}/export`);
-      const response = await fetch(data.url, { cache: "no-store", referrerPolicy: "no-referrer" });
+      const data = await requestApi<{ original_filename: string; memory: unknown }>(`/api/photos/${id}/export`);
+      const response = await fetch(`/api/photos/${id}/asset?kind=original`, { cache: "no-store", referrerPolicy: "no-referrer" });
       if (!response.ok) throw new Error("사진을 가져오지 못했어요. 다시 시도해주세요.");
       const bytes = new Uint8Array(await response.arrayBuffer());
       const archive = createArchive(data.original_filename, bytes, data.memory);

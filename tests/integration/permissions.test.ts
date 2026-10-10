@@ -22,6 +22,7 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
   let lateNotePhotoId: string | undefined;
   let lateNoteOriginalKey: string | undefined;
   let lateNoteThumbnailKey: string | undefined;
+  let unreservedUploadKey: string | undefined;
   try {
     const dbPolicy = await admin.rpc("app_policy");
     expect(dbPolicy.error).toBeNull(); expect(dbPolicy.data).toEqual(policy);
@@ -65,6 +66,11 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     const mismatchedRetry = await admin.rpc("reserve_uploads", { p_user_id: userIds[0], p_files: [{ ...file, original_name: "changed.png" }] });
     expect(mismatchedRetry.error?.message).toBe("INVALID_INPUT");
 
+    unreservedUploadKey = `${userIds[0]}/${crypto.randomUUID()}/original.png`;
+    const unreservedUpload = await sessions[0].storage.from(policy.bucket).upload(unreservedUploadKey,
+      new Blob([Uint8Array.from(original)], { type: "image/png" }), { contentType: "image/png", upsert: false });
+    expect(unreservedUpload.error).not.toBeNull();
+
     const limitBatch = (count: number) => Array.from({ length: count }, () => ({
       original_name: `limit-${crypto.randomUUID()}.png`, mime_type: "image/png", byte_size: original.length,
       client_request_id: crypto.randomUUID(),
@@ -80,10 +86,12 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     const userBCount = await admin.from("photos").select("id", { count: "exact", head: true }).eq("user_id", userIds[1]);
     expect(userBCount.count).toBe(20);
 
-    const uploadUrl = await admin.storage.from(policy.bucket).createSignedUploadUrl(originalKey, { upsert: false });
-    expect(uploadUrl.error).toBeNull();
-    const uploaded = await sessions[0].storage.from(policy.bucket).uploadToSignedUrl(originalKey, uploadUrl.data!.token,
-      new Blob([Uint8Array.from(original)], { type: "image/png" }));
+    const unauthorizedUpload = await sessions[1].storage.from(policy.bucket).upload(originalKey,
+      new Blob([Uint8Array.from(original)], { type: "image/png" }), { contentType: "image/png", upsert: false });
+    expect(unauthorizedUpload.error).not.toBeNull();
+    const uploaded = await sessions[0].storage.from(policy.bucket).upload(originalKey,
+      new Blob([Uint8Array.from(original)], { type: "image/png" }),
+      { contentType: "image/png", upsert: false, cacheControl: "0" });
     expect(uploaded.error).toBeNull();
     const storedOriginal = await admin.storage.from(policy.bucket).download(originalKey);
     expect(storedOriginal.error).toBeNull();
@@ -134,13 +142,11 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     expect(hiddenPhoto.error).toBeNull();
     expect(hiddenPhoto.data).toEqual([]);
 
-    const ownerUrl = await sessions[0].storage.from(policy.bucket).createSignedUrl(originalKey, policy.assetTtl);
-    expect(ownerUrl.error).toBeNull();
-    const fetched = await fetch(ownerUrl.data!.signedUrl);
-    expect(fetched.ok).toBe(true);
-    expect(Buffer.from(await fetched.arrayBuffer()).equals(original)).toBe(true);
-    const otherUserUrl = await sessions[1].storage.from(policy.bucket).createSignedUrl(originalKey, policy.assetTtl);
-    expect(otherUserUrl.error).not.toBeNull();
+    const ownerAsset = await sessions[0].storage.from(policy.bucket).download(originalKey);
+    expect(ownerAsset.error).toBeNull();
+    expect(Buffer.from(await ownerAsset.data!.arrayBuffer()).equals(original)).toBe(true);
+    const otherUserAsset = await sessions[1].storage.from(policy.bucket).download(originalKey);
+    expect(otherUserAsset.error).not.toBeNull();
 
     const lateNoteReservation = await admin.rpc("reserve_uploads", { p_user_id: userIds[0], p_files: [{
       original_name: "late-note.png", mime_type: "image/png", byte_size: original.length,
@@ -153,10 +159,9 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     lateNotePhotoId = lateNotePhoto.id;
     lateNoteOriginalKey = lateNotePhoto.original_key;
     lateNoteThumbnailKey = lateNotePhoto.thumbnail_key;
-    const lateNoteUploadUrl = await admin.storage.from(policy.bucket).createSignedUploadUrl(lateNoteOriginalKey, { upsert: false });
-    expect(lateNoteUploadUrl.error).toBeNull();
-    const lateNoteUploaded = await sessions[0].storage.from(policy.bucket).uploadToSignedUrl(lateNoteOriginalKey,
-      lateNoteUploadUrl.data!.token, new Blob([Uint8Array.from(original)], { type: "image/png" }));
+    const lateNoteUploaded = await sessions[0].storage.from(policy.bucket).upload(lateNoteOriginalKey,
+      new Blob([Uint8Array.from(original)], { type: "image/png" }),
+      { contentType: "image/png", upsert: false, cacheControl: "0" });
     expect(lateNoteUploaded.error).toBeNull();
     const lateNoteClaim = await admin.rpc("claim_upload", { p_user_id: userIds[0], p_photo_id: lateNotePhotoId });
     expect(lateNoteClaim.error).toBeNull();
@@ -231,11 +236,9 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     expect(stillPreserved.data?.preserved_at).not.toBeNull();
     expect((await sessions[0].from("photos").select("first_note_at").eq("id", photoId).single()).data?.first_note_at)
       .toBe(firstNote.data?.first_note_at);
-    const afterExpiryUrl = await sessions[0].storage.from(policy.bucket).createSignedUrl(originalKey, policy.assetTtl);
-    expect(afterExpiryUrl.error).toBeNull();
-    const afterExpiryAsset = await fetch(afterExpiryUrl.data!.signedUrl);
-    expect(afterExpiryAsset.ok).toBe(true);
-    expect(Buffer.from(await afterExpiryAsset.arrayBuffer()).equals(original)).toBe(true);
+    const afterExpiryAsset = await sessions[0].storage.from(policy.bucket).download(originalKey);
+    expect(afterExpiryAsset.error).toBeNull();
+    expect(Buffer.from(await afterExpiryAsset.data!.arrayBuffer()).equals(original)).toBe(true);
 
     const deleteRequest = await admin.rpc("queue_photo_delete", { p_user_id: userIds[0], p_photo_id: photoId });
     expect(deleteRequest.error).toBeNull();
@@ -314,6 +317,7 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
   } finally {
     const keys = [originalKey, thumbnailKey, lateNoteOriginalKey, lateNoteThumbnailKey]
       .filter((key): key is string => Boolean(key));
+    if (unreservedUploadKey) keys.push(unreservedUploadKey);
     if (keys.length) await admin.storage.from(policy.bucket).remove(keys);
     if (cleanupJobId) await admin.from("cleanup_jobs").delete().eq("id", cleanupJobId);
     if (retryCleanupJobId) await admin.from("cleanup_jobs").delete().eq("id", retryCleanupJobId);

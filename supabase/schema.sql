@@ -97,6 +97,9 @@ create policy photo_owner on public.photos for select to authenticated using (
   user_id = (select auth.uid()) and lifecycle = 'ready' and
   exists (select 1 from public.profiles p where p.user_id = photos.user_id and p.account_state = 'active')
 );
+create schema private;
+revoke all on schema private from public, anon, authenticated, service_role;
+grant usage on schema private to authenticated, service_role;
 insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
 values ('memory-assets','memory-assets',false,10485760,array['image/jpeg','image/png','image/webp']);
 create policy memory_assets_owner on storage.objects for select to authenticated using (
@@ -104,10 +107,26 @@ create policy memory_assets_owner on storage.objects for select to authenticated
     where p.user_id = (select auth.uid()) and p.lifecycle = 'ready'
       and (p.original_key = name or p.thumbnail_key = name))
 );
+create function private.can_upload_reserved_object(p_name text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  -- 업로드 중인 사진 행은 일반 SELECT 정책에서 숨겨져 있어 예약 여부만 안전하게 확인합니다.
+  select exists (select 1 from public.photos p
+    join public.trials t on t.id = p.trial_id and t.user_id = p.user_id
+    join public.profiles pr on pr.user_id = p.user_id
+    where p.user_id = (select auth.uid()) and p.original_key = p_name and p.lifecycle = 'uploading'
+      and p.upload_deadline_at > pg_catalog.statement_timestamp()
+      and (t.ends_at is null or t.ends_at > pg_catalog.statement_timestamp())
+      and pr.account_state = 'active');
+$$;
+revoke all on function private.can_upload_reserved_object(text) from public, anon, authenticated, service_role;
+grant execute on function private.can_upload_reserved_object(text) to authenticated;
+create policy memory_assets_reserved_upload on storage.objects for insert to authenticated with check (
+  bucket_id = 'memory-assets' and private.can_upload_reserved_object(name)
+);
 
 create function public.app_policy() returns jsonb language sql immutable security invoker set search_path = '' as $$
   select jsonb_build_object('trialHours',48,'maxPhotos',20,'maxBatch',10,'maxBytes',10485760,
-    'maxPixels',40000000,'noteLength',500,'assetTtl',300,'reservationHours',24,'bucket','memory-assets');
+    'maxPixels',40000000,'noteLength',500,'reservationHours',24,'bucket','memory-assets');
 $$;
 
 create function public.ensure_profile(p_user_id uuid) returns void language plpgsql security invoker set search_path = '' as $$

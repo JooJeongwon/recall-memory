@@ -10,6 +10,3 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 return new Response(null, { status: 204, headers: { "Cache-Control": "private, no-store" } });
   })(request);
 }
-
-
-\n

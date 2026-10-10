@@ -6,7 +6,7 @@ import { requestApi } from "@/lib/api";
 import { formats, policy } from "@/lib/config";
 
 type Item = { file: File; requestId: string; status: string; done: boolean };
-type Reservation = { id: string; path?: string; token?: string; already_ready: boolean };
+type Reservation = { id: string; path?: string; already_ready: boolean };
 export function UploadForm() {
   const [items, setItems] = useState<Item[]>([]);
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,8 @@ export function UploadForm() {
         const reserved = reservations[0];
         if (!reserved.already_ready) {
           update(item.requestId, "사진 전송 중…");
-          const { error } = await createClient().storage.from(policy.bucket).uploadToSignedUrl(reserved.path!, reserved.token!, item.file);
+          const { error } = await createClient().storage.from(policy.bucket).upload(reserved.path!, item.file,
+            { contentType: item.file.type, upsert: false, cacheControl: "0" });
           // 응답 유실로 객체가 이미 있으면 확정 API에서 실제 파일을 검증합니다.
           if (error && !/already exists|duplicate/i.test(error.message)) throw new Error("사진 전송에 실패했어요. 다시 시도해주세요.");
           update(item.requestId, "사진 확인 중…");

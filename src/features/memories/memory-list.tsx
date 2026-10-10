@@ -24,12 +24,8 @@ export function MemoryList() {
 }
 
 function MemoryThumbnail({ id }: { id: string }) {
-  const [url, setUrl] = useState("");
-  useEffect(() => {
-    let active = true;
-    requestApi<{ url: string }>(`/api/photos/${id}/asset`).then((data) => { if (active) setUrl(data.url); }).catch(() => {});
-    return () => { active = false; };
-  }, [id]);
+  const [failed, setFailed] = useState(false);
   // eslint-disable-next-line @next/next/no-img-element
-  return url ? <img className="photo" src={url} alt="보관한 사진" loading="lazy" /> : <p>사진을 열어 확인해주세요.</p>;
+  return failed ? <p>사진을 열어 확인해주세요.</p> : <img className="photo" src={`/api/photos/${id}/asset`}
+    alt="보관한 사진" loading="lazy" onError={() => setFailed(true)} />;
 }
