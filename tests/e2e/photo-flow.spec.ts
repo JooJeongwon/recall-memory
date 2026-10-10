@@ -65,6 +65,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
       else await route.continue();
     });
     await page.goto("/revisit");
+    await expect(page.getByRole("status")).toHaveText("인터넷 연결이 불안정해요. 연결을 확인한 뒤 다시 시도해주세요.");
     await expect(page.getByRole("button", { name: "다시 불러오기" })).toBeVisible();
     await expect(page.getByRole("link", { name: "사진 선택하기" })).toBeVisible();
     await page.getByRole("button", { name: "다시 불러오기" }).click();
@@ -249,13 +250,17 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     });
     const originalAssetRoute = /\/api\/photos\/[^/]+\/asset\?kind=original(?:&|$)/;
     let originalAssetRequests = 0;
+    let failNetworkOnce = true;
     let failDownloadOnce = true;
     page.on("request", (request) => {
       const url = new URL(request.url());
       if (url.pathname.endsWith("/asset") && url.searchParams.get("kind") === "original") originalAssetRequests++;
     });
     await page.route(originalAssetRoute, async (route) => {
-      if (failDownloadOnce) {
+      if (failNetworkOnce) {
+        failNetworkOnce = false;
+        await route.abort("internetdisconnected");
+      } else if (failDownloadOnce) {
         failDownloadOnce = false;
         await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
       } else await route.continue();
@@ -266,16 +271,25 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
       exportButton.click(),
     ]);
     expect(await exportResponse.json()).not.toHaveProperty("url");
-    await expect(page.getByRole("status").filter({ hasText: "사진을 가져오지 못했어요. 다시 시도해주세요." })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "인터넷 연결이 불안정해요. 연결을 확인한 뒤 다시 시도해주세요." })).toBeVisible();
     await expect(exportButton).toBeEnabled();
     expect(exportPreparations).toBe(1);
     expect(originalAssetRequests).toBe(1);
+    const [failedResponse] = await Promise.all([
+      page.waitForResponse((response) => exportRoute.test(new URL(response.url()).pathname)),
+      exportButton.click(),
+    ]);
+    expect(await failedResponse.json()).not.toHaveProperty("url");
+    await expect(page.getByRole("status").filter({ hasText: "사진을 가져오지 못했어요. 다시 시도해주세요." })).toBeVisible();
+    await expect(exportButton).toBeEnabled();
+    expect(exportPreparations).toBe(2);
+    expect(originalAssetRequests).toBe(2);
     await page.unroute(originalAssetRoute);
     const [updatedDownload] = await Promise.all([
       page.waitForEvent("download"),
       exportButton.click(),
     ]);
-    expect(exportPreparations).toBe(2);
+    expect(exportPreparations).toBe(3);
     await expect(page.getByRole("status").filter({ hasText: "사진과 메모 ZIP을 만들었어요." })).toBeVisible();
     const updatedPath = await updatedDownload.path();
     expect(updatedPath).not.toBeNull();

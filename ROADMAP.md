@@ -121,7 +121,7 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 - [x] 앱 소스·동의된 분석 이벤트·최근 합성 검증의 로그 노출을 확인한다. 직접 logger·console 기록과 외부 분석 SDK가 없고, 행동 이벤트는 이벤트 이름·사진 ID·방문 맥락만 보낸다. 2026-10-10 post-change 원격 로그 10분 집계에서 테스트 파일명·메모 문구·`token=`은 없었다.
 - [ ] 운영 로그의 접근·보존 범위와 요청 경로·계정·IP 메타데이터 처리 방침을 확인한다. Supabase managed logs에 계정·IP·요청 경로 메타데이터가 남고, [공식 문서](https://supabase.com/docs/guides/troubleshooting/check-usage-for-monthly-active-users-mau-MwZaBs)는 Free 요금제 로그 접근 기간을 1일로 안내한다. 프로젝트 접근 역할과 실제 설정, 호스팅 로그는 아직 확인하지 않았다.
 - [ ] DB와 파일의 복구 범위, 운영 종료 시 반출 안내 계획을 확인한다. Supabase 조직이 Free 요금제인 것을 확인했다. [공식 백업 문서](https://supabase.com/docs/guides/platform/backups)는 자동 일일 백업을 유료 요금제로 설명하고, Free에는 정기 오프사이트 DB export를 권하며 Storage API 객체는 DB 백업에서 제외한다고 안내한다. DB·Storage 백업 및 복구 연습은 아직 없다.
-- [ ] 모바일 브라우저·느린 연결·통신 단절 상태를 점검한다. 공통 API 요청과 ZIP 원본 스트리밍의 네트워크 실패는 연결 확인·재시도 안내로 표시한다. 실제 모바일 오프라인·느린 연결 검증은 아직 하지 않았다.
+- [ ] 모바일 브라우저·느린 연결·통신 단절 상태를 점검한다. 모바일 Chromium E2E에서 목록 API와 ZIP 원본 스트림의 연결 단절 안내·재시도를 확인했다. 실제 기기의 오프라인·느린 연결 검증은 아직 하지 않았다.
 
 ### 필수 검증 표
 
@@ -288,3 +288,8 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 - 검증: lint, typecheck, 단위 테스트 8개, 원격 통합 테스트 1개, E2E 2개(보관함 썸네일 재시도 포함), 운영 build, `git diff --check` 통과.
 
 P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 범위 밖의 사진 보존·ZIP 원본 일치·실제 삭제를 검증된 기능으로 보고하지 않는다.
+
+## 22. 모바일 브라우저 연결 단절 재시도 검증 — 2026년 10월 10일
+
+- 검증: iPhone 13 뷰포트의 Chromium E2E에서 목록 API 연결 중단과 ZIP 원본 스트림의 `internetdisconnected`를 재현했다. 두 흐름 모두 연결 안내를 표시하고 재시도할 수 있었으며, 재시도한 ZIP의 원본·메타데이터가 일치했다.
+- 제한: 브라우저 수준의 합성 네트워크 오류 검증이다. 실제 iOS·Android 기기, 오프라인 전환, 느린 연결 측정은 남아 있어 P4 항목은 완료하지 않았다.
