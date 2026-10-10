@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { requestApi } from "@/lib/api";
+import { NETWORK_ERROR_MESSAGE, RequestError, requestApi } from "@/lib/api";
 import { createArchive } from "./archive";
 
 export function ExportButton({ id }: { id: string }) {
@@ -10,9 +10,15 @@ export function ExportButton({ id }: { id: string }) {
     setBusy(true); setMessage("");
     try {
       const data = await requestApi<{ original_filename: string; memory: unknown }>(`/api/photos/${id}/export`);
-      const response = await fetch(`/api/photos/${id}/asset?kind=original`, { cache: "no-store", referrerPolicy: "no-referrer" });
-      if (!response.ok) throw new Error("사진을 가져오지 못했어요. 다시 시도해주세요.");
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      let bytes: Uint8Array;
+      try {
+        const response = await fetch(`/api/photos/${id}/asset?kind=original`, { cache: "no-store", referrerPolicy: "no-referrer" });
+        if (!response.ok) throw new Error("사진을 가져오지 못했어요. 다시 시도해주세요.");
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } catch (error) {
+        if (error instanceof TypeError) throw new RequestError(NETWORK_ERROR_MESSAGE, "NETWORK_ERROR");
+        throw error;
+      }
       const archive = createArchive(data.original_filename, bytes, data.memory);
       const url = URL.createObjectURL(new Blob([new Uint8Array(archive)], { type: "application/zip" }));
       const link = document.createElement("a"); link.href = url; link.download = `memory-${id}.zip`;
