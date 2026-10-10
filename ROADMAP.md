@@ -44,7 +44,7 @@
 ### 작업
 
 - [x] Next.js·TypeScript 프로젝트를 만들고 공식 문서 기준으로 버전을 고정한다. lockfile 생성과 `npm ci`를 확인했다.
-- [x] lint·typecheck·test·integration·e2e·build 스크립트를 정의한다. lint·typecheck·단위 테스트 8개·원격 integration 1개·E2E 2개(소개, 업로드·보관·만료 후 ZIP)·build 통과.
+- [x] lint·typecheck·test·integration·e2e·build 스크립트를 정의한다. lint·typecheck·단위 테스트 14개·원격 integration 6개·E2E 8개(소개, 목록 응답 순서, 업로드·보관/ZIP, 메모 복구, 만료 후 반출, 분석 동의, 삭제)·build 통과.
 - [x] `.env.example`과 개발 실행 설명을 작성한다.
 - [x] 개발용 Supabase 환경을 만들고 운영 환경과 분리한다. 서울 지역의 `recall-memory` (`mgedpimvznbatmipaacn`)는 합성 데이터 검증 전용 개발 프로젝트다.
 - [ ] Google OAuth Web client를 만들고 Supabase Google provider·Site URL·localhost/127.0.0.1 callback URL을 설정해 실제 로그인을 확인한다. 로그인 버튼과 `/auth/confirm` code 교환은 구현했지만 Provider 설정과 실사용은 아직 확인하지 않았다.
@@ -298,3 +298,13 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 
 - 검증: 원격 개발 DB 통합 테스트에서 기한이 지난 `uploading`·`failed` 사진은 `incomplete_upload` 작업으로 대기열에 들어가고, 기한이 지난 `ready` 보관·미보관 사진은 유지되는 것을 확인했다. 전역 sweeper 호출 전에는 테스트 프로젝트에 다른 만료 대상이 없는지 검사한다.
 - 제한: 대상 선정과 DB 대기열까지만 확인했다. `run_after`는 발급된 Storage 업로드 토큰을 고려해 늦게 설정되며, 실제 Storage 제거와 자동 주기 실행은 worker·Cron 인증 설정 후 검증한다.
+
+## 24. 업로드·인증·목록 재시도와 테스트 리팩토링 — 2026년 10월 10일
+
+- 변경: 업로드 확정은 `{ photo }`만 반환하며 사용하지 않는 `me_state` 부가 조회를 제거했다. DB 확정 뒤 계정 조회 실패 때문에 사진 업로드를 실패로 표시하지 않는다. 실험 시각은 기존 `GET /api/me`를 사용한다.
+- 변경: 업로드 확정·계정 삭제의 내부 RPC가 같은 요청에서 검증한 사용자 정보를 재사용한다. 다른 호출의 인증과 DB 함수의 소유권·계정 상태·라이프사이클 검사는 유지한다.
+- 통과: 단위 테스트로 정상·기확정 업로드와 계정 삭제의 인증 1회, 부가 조회 없는 성공, 다운로드 실패의 lease 반환, 미인증 호출 차단·사용자 ID 덮어쓰기를 확인했다.
+- 통과: 다시 보기·보관함 E2E에서 이전 요청을 보류하고 재시도 성공 뒤 이전 성공·오류 응답을 반환해 최신 목록이 유지되는 것을 확인했다.
+- 변경: 원격 통합 테스트는 권한·업로드·메모·만료 및 정리 대상·삭제 완료·lease 재시도의 6개로, 사진 E2E는 응답 순서 2개와 업로드부터 보관·ZIP까지의 흐름, 메모 복구, 만료 후 반출, 분석 동의, 삭제의 5개로 나눴다. 각 테스트가 새 합성 계정·파일을 생성하며 공통 fixture가 정리한다. 정리 오류도 테스트 실패로 보고한다.
+- 검증: lint, typecheck, 단위 테스트 14개, 원격 통합 테스트 6개, 모바일 Chromium E2E 8개(소개 포함), 운영 build, `git diff --check` 통과.
+- 제한: Google OAuth 실제 로그인·실제 48시간 재접속·실기기·Cron·계정 전체 제거는 이번 작업에서 확인하지 않았다. 기존 미완료 항목은 그대로 두고 MVP 완료로 표시하지 않는다.

@@ -19,13 +19,14 @@ export async function reserveUploads(input: z.infer<typeof uploadInput>) {
 }
 export async function completeUpload(id: string) {
   z.uuid().parse(id);
-  const { user } = await requireUser();
+  const auth = await requireUser();
+  const { user } = auth;
   const admin = adminClient();
   const claim = z.discriminatedUnion("already_ready", [
     z.object({ already_ready: z.literal(true), photo: photoSchema }),
     z.object({ already_ready: z.literal(false), token: z.uuid(), photo: reservation.extend({ thumbnail_key: z.string() }) }),
-  ]).parse(await rpc("claim_upload", { p_photo_id: id }));
-  if (claim.already_ready) return { photo: photoSchema.parse(claim.photo), me: await rpc("me_state", {}) };
+  ]).parse(await rpc("claim_upload", { p_photo_id: id }, auth));
+  if (claim.already_ready) return { photo: claim.photo };
   const photo = reservation.parse(claim.photo);
   const downloaded = await admin.storage.from(policy.bucket).download(photo.original_key);
   if (downloaded.error || !downloaded.data) {
@@ -41,8 +42,8 @@ export async function completeUpload(id: string) {
       { contentType: "image/webp", upsert: true, cacheControl: "0" });
     if (saved.error) throw new ApiError(503, "TEMPORARY_FAILURE");
     const data = await rpc("complete_upload", { p_photo_id: id, p_token: claim.token,
-      p_width: image.width, p_height: image.height, p_bytes: bytes.length, p_mime: image.mime });
-    return { photo: photoSchema.parse(data), me: await rpc("me_state", {}) };
+      p_width: image.width, p_height: image.height, p_bytes: bytes.length, p_mime: image.mime }, auth);
+    return { photo: photoSchema.parse(data) };
   } catch (error) {
     if (error instanceof ApiError && [413, 415].includes(error.status)) {
       const queued = await admin.rpc("queue_photo_delete", { p_user_id: user.id, p_photo_id: id, p_kind: "incomplete_upload" });

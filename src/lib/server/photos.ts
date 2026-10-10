@@ -8,8 +8,10 @@ import { photoSchema, photoColumns, uuid } from "../validation/contracts";
 import type { Database } from "@/types/database";
 
 type Functions = Database["public"]["Functions"];
-export async function rpc<Name extends keyof Functions>(name: Name, args: Omit<Functions[Name]["Args"], "p_user_id">) {
-  const { user } = await requireUser();
+// 인증 결과는 같은 서버 요청 내부에서만 재사용합니다.
+export async function rpc<Name extends keyof Functions>(name: Name, args: Omit<Functions[Name]["Args"], "p_user_id">,
+  auth?: Awaited<ReturnType<typeof requireUser>>) {
+  const { user } = auth ?? await requireUser();
   const params = { ...args, p_user_id: user.id } as Functions[Name]["Args"];
   const { data: result, error } = await adminClient().rpc(name, params);
   dbError(error);

@@ -7,10 +7,11 @@ import { ApiError, dbError } from "./http";
 import { rpc } from "./photos";
 
 export async function deleteAccount() {
-  const { supabase } = await requireUser();
+  const auth = await requireUser();
+  const { supabase } = auth;
   const token = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(token).digest("hex");
-  const job = await rpc("request_account_delete", { p_token_hash: hash });
+  const job = await rpc("request_account_delete", { p_token_hash: hash }, auth);
   if (!job) throw new ApiError(503, "TEMPORARY_FAILURE");
   // DB 차단이 먼저 확정됐으며 로그아웃 실패에도 삭제 작업은 계속됩니다.
   await supabase.auth.signOut({ scope: "global" });

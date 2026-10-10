@@ -12,10 +12,13 @@ export function Revisit() {
   const [message, setMessage] = useState("사진을 불러오는 중…");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    let active = true;
     requestApi<{ photos: unknown[] }>("/api/photos?limit=20").then((data) => {
+      if (!active) return;
       const list = z.array(photoSchema).parse(data.photos); setPhotos(list);
       setIndex(Math.max(0, list.findIndex((p) => !p.first_viewed_at))); setMessage(list.length ? "" : "선택한 사진이 아직 없어요.");
-    }).catch((e: Error) => setMessage(e.message));
+    }).catch((e: Error) => { if (active) setMessage(e.message); });
+    return () => { active = false; };
   }, [retry]);
   return <><p role="status">{message}</p>{photos[index] && <><PhotoView key={photos[index].id} id={photos[index].id} />
     <div className="actions"><button data-leave className="secondary" disabled={index === 0}

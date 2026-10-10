@@ -10,10 +10,13 @@ export function MemoryList() {
   const [message, setMessage] = useState("보관함을 불러오는 중…");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    let active = true;
     requestApi<{ photos: unknown[] }>("/api/photos?scope=preserved&limit=20").then((data) => {
+      if (!active) return;
       const list = z.array(photoSchema).parse(data.photos); setPhotos(list);
       setMessage(list.length ? "" : "다시 본 순간에 한 줄을 남기면 여기에 모여요.");
-    }).catch((e: Error) => setMessage(e.message));
+    }).catch((e: Error) => { if (active) setMessage(e.message); });
+    return () => { active = false; };
   }, [retry]);
   return <><p role="status">{message}</p><div className="grid">{photos.map((photo) => <article className="card" key={photo.id}>
     <MemoryThumbnail key={`${photo.id}:${retry}`} id={photo.id} />
