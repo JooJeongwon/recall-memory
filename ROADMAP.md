@@ -116,7 +116,7 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 - [x] 사용자가 요청하는 사진 삭제·계정 삭제 UI를 구현한다. E2E에서 보관 사진 삭제 접수·숨김, 계정 삭제 요청과 진행 토큰 기반 대기 상태를 확인했다. 실제 파일·계정 정리는 유지관리 worker가 비활성화되어 있어 별도 검증한다.
 - [x] deleting 상태·중복 방지 작업·Storage API 삭제·완료 상태를 검증한다. 원격 합성 사진에 중복 삭제 요청을 보내 같은 작업 ID·단일 큐 행을 확인하고, fixture로 실행 시각을 당겨 claim → Storage API remove → 완료 RPC 뒤 파일 제거·개인정보 비움·완료 상태를 확인했다.
 - [ ] 유지관리 Edge Function과 내부 인증·Cron·재시도 lease를 구성한다. 함수 배포와 미인증 POST의 401 응답을 확인했고 개발 DB의 `pg_cron`·`pg_net` 확장을 켰다. 2026-10-10 원격 확인에서 함수는 ACTIVE v1이지만 Vault의 두 설정값과 Cron 일정은 없다. 현재 연결은 DB 작업만 허용하고 Supabase CLI 관리 토큰도 없어 Edge Function secret을 설정할 수 없다.
-- [ ] 24시간 지난 미완료 업로드만 자동 정리한다.
+- [ ] 24시간 지난 미완료 업로드만 자동 정리한다. 원격 합성 통합 테스트에서 만료한 `uploading`·`failed`만 정리 큐에 넣고, 만료한 `ready` 보관·미보관 사진은 제외하는 `sweep_incomplete()`을 검증했다. 주기 실행과 Storage 삭제는 Cron·worker 설정 후 확인한다.
 - [x] 작업별 진행 토큰을 사용해 로그아웃 이후 계정 삭제 상태 확인을 구현한다. global sign-out 후 sessionStorage의 토큰으로 상태 API를 조회하고 대기 UI를 표시하는 E2E를 확인했다. 실제 삭제 작업 완료는 worker 활성화 후 별도 검증한다.
 - [x] 앱 소스·동의된 분석 이벤트·최근 합성 검증의 로그 노출을 확인한다. 직접 logger·console 기록과 외부 분석 SDK가 없고, 행동 이벤트는 이벤트 이름·사진 ID·방문 맥락만 보낸다. 2026-10-10 post-change 원격 로그 10분 집계에서 테스트 파일명·메모 문구·`token=`은 없었다.
 - [ ] 운영 로그의 접근·보존 범위와 요청 경로·계정·IP 메타데이터 처리 방침을 확인한다. Supabase managed logs에 계정·IP·요청 경로 메타데이터가 남고, [공식 문서](https://supabase.com/docs/guides/troubleshooting/check-usage-for-monthly-active-users-mau-MwZaBs)는 Free 요금제 로그 접근 기간을 1일로 안내한다. 프로젝트 접근 역할과 실제 설정, 호스팅 로그는 아직 확인하지 않았다.
@@ -293,3 +293,8 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 
 - 검증: iPhone 13 뷰포트의 Chromium E2E에서 목록 API 연결 중단과 ZIP 원본 스트림의 `internetdisconnected`를 재현했다. 두 흐름 모두 연결 안내를 표시하고 재시도할 수 있었으며, 재시도한 ZIP의 원본·메타데이터가 일치했다.
 - 제한: 브라우저 수준의 합성 네트워크 오류 검증이다. 실제 iOS·Android 기기, 오프라인 전환, 느린 연결 측정은 남아 있어 P4 항목은 완료하지 않았다.
+
+## 23. 미완료 업로드 정리 대상 검증 — 2026년 10월 10일
+
+- 검증: 원격 개발 DB 통합 테스트에서 기한이 지난 `uploading`·`failed` 사진은 `incomplete_upload` 작업으로 대기열에 들어가고, 기한이 지난 `ready` 보관·미보관 사진은 유지되는 것을 확인했다. 전역 sweeper 호출 전에는 테스트 프로젝트에 다른 만료 대상이 없는지 검사한다.
+- 제한: 대상 선정과 DB 대기열까지만 확인했다. `run_after`는 발급된 Storage 업로드 토큰을 고려해 늦게 설정되며, 실제 Storage 제거와 자동 주기 실행은 worker·Cron 인증 설정 후 검증한다.

@@ -12,6 +12,13 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
   if (!url || !key || !secret || !projectId || new URL(url).origin !== `https://${projectId}.supabase.co`)
     throw new Error("통합 검증에는 URL과 ID가 일치하는 전용 개발 Supabase 프로젝트를 명시해야 합니다.");
   const admin = createClient<Database>(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+  const beforeSweep = new Date().toISOString();
+  const staleUploads = await admin.from("photos").select("id", { count: "exact", head: true })
+    .in("lifecycle", ["uploading", "failed"]).lt("upload_deadline_at", beforeSweep).is("preserved_at", null);
+  expect(staleUploads.error).toBeNull(); expect(staleUploads.count).toBe(0);
+  const expiredAccountJobs = await admin.from("cleanup_jobs").select("id", { count: "exact", head: true })
+    .eq("kind", "account_delete").eq("status", "done").lt("progress_expires_at", beforeSweep);
+  expect(expiredAccountJobs.error).toBeNull(); expect(expiredAccountJobs.count).toBe(0);
   const userIds: string[] = [];
   let photoId: string | undefined;
   let cleanupJobId: string | undefined;
@@ -183,11 +190,19 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     }, {
       original_name: "late-claim.png", mime_type: "image/png", byte_size: original.length,
       client_request_id: crypto.randomUUID(),
+    }, {
+      original_name: "expired-uploading.png", mime_type: "image/png", byte_size: original.length,
+      client_request_id: crypto.randomUUID(),
+    }, {
+      original_name: "expired-failed.png", mime_type: "image/png", byte_size: original.length,
+      client_request_id: crypto.randomUUID(),
     }] });
     expect(pendingResult.error).toBeNull();
     const pendingPhotos = pendingResult.data as unknown as Array<{ id: string }>;
     pendingPhotoId = pendingPhotos[0].id;
     const lateClaimPhotoId = pendingPhotos[1].id;
+    const expiredUploadingPhotoId = pendingPhotos[2].id;
+    const expiredFailedPhotoId = pendingPhotos[3].id;
     const claimBeforeExpiry = await admin.rpc("claim_upload", { p_user_id: userIds[0], p_photo_id: pendingPhotoId });
     expect(claimBeforeExpiry.error).toBeNull();
     const validationToken = (claimBeforeExpiry.data as { token: string }).token;
@@ -222,6 +237,27 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
       .in("id", [pendingPhotoId, lateClaimPhotoId]);
     expect(deletingPhotos.data).toHaveLength(2);
     expect(deletingPhotos.data?.every(({ lifecycle }) => lifecycle === "deleting")).toBe(true);
+    const expiredDeadline = new Date(Date.now() - 60_000).toISOString();
+    const overdueFixtures = await admin.from("photos").update({ upload_deadline_at: expiredDeadline })
+      .in("id", [photoId, lateNotePhotoId, expiredUploadingPhotoId, expiredFailedPhotoId]);
+    expect(overdueFixtures.error).toBeNull();
+    expect((await admin.from("photos").update({ lifecycle: "failed" }).eq("id", expiredFailedPhotoId)).error).toBeNull();
+    expect((await admin.rpc("sweep_incomplete")).error).toBeNull();
+    const sweptPhotos = await admin.from("photos").select("id,lifecycle").in("id", [
+      photoId, lateNotePhotoId, expiredUploadingPhotoId, expiredFailedPhotoId,
+    ]);
+    expect(sweptPhotos.error).toBeNull();
+    expect(sweptPhotos.data).toHaveLength(4);
+    expect(sweptPhotos.data?.filter(({ id }) => [expiredUploadingPhotoId, expiredFailedPhotoId].includes(id))
+      .every(({ lifecycle }) => lifecycle === "deleting")).toBe(true);
+    expect(sweptPhotos.data?.filter(({ id }) => [photoId, lateNotePhotoId].includes(id))
+      .every(({ lifecycle }) => lifecycle === "ready")).toBe(true);
+    const sweptJobs = await admin.from("cleanup_jobs").select("photo_id,kind,status")
+      .in("photo_id", [expiredUploadingPhotoId, expiredFailedPhotoId]);
+    expect(sweptJobs.error).toBeNull(); expect(sweptJobs.data).toHaveLength(2);
+    expect(sweptJobs.data?.every(({ kind, status }) => kind === "incomplete_upload" && status === "pending")).toBe(true);
+    const readyJobs = await admin.from("cleanup_jobs").select("id").in("photo_id", [photoId, lateNotePhotoId]);
+    expect(readyJobs.error).toBeNull(); expect(readyJobs.data).toEqual([]);
     const version = await sessions[0].from("photos").select("version").eq("id", photoId).single();
     expect(version.error).toBeNull();
     const currentVersion = version.data?.version;
