@@ -2,7 +2,7 @@
 
 목표는 사용자가 사진을 다시 보고 한 줄 메모와 함께 남긴 뒤, 기간이 끝나도 사진·메모를 확인하고 다운로드할 수 있는 MVP를 만드는 것이다. 기능 수가 아니라 이 흐름의 완성과 사용자 가설 검증을 기준으로 진행한다.
 
-초기 소스가 작성되었으며 체크박스는 검증된 산출물만 반영한다. lint·typecheck·단위 테스트 8개·원격 통합 테스트 1개·모바일 E2E 2개·운영 빌드가 통과했다. 원격 합성 계정으로 업로드 검증·재시도, 메모 저장·충돌·보관·만료 후 ZIP 반출, 삭제 흐름과 권한 경계를 확인했다. 2026년 10월 10일 Storage 접근을 예약 객체에 대한 세션 업로드와 소유권 확인 후 same-origin 바이너리 스트리밍으로 바꿨다. post-change 원격 로그 10분 구간에서 `token=`·합성 메모·E2E 파일명은 0건이었다. provider 로그에는 계정·IP·요청 경로 같은 연결 메타데이터가 남으므로 보존·접근 범위 확인은 계속 필요하다. 유지관리 함수는 개발 프로젝트에 배포했고 미인증 호출 401을 확인했다. `pg_cron`·`pg_net`은 켰지만 내부 호출 비밀과 Cron 일정은 아직 설정하지 않았다. 현재 조직 요금제는 Free이며, DB·Storage 복구 계획도 미확정이다. Google OAuth 실제 로그인, 실제 48시간 경과 후 재접속, 자동 삭제와 계정 제거 검증은 남아 있다.
+초기 소스가 작성되었으며 체크박스는 검증된 산출물만 반영한다. 2026년 10월 10일 기준 lint·typecheck·단위·원격 통합·모바일 Chromium E2E·운영 빌드를 확인했다. 원격 합성 계정으로 업로드 검증·재시도, 메모·보관·ZIP 반출, 삭제 흐름과 권한 경계를 확인했다. Storage 접근은 예약 객체에 대한 세션 업로드와 소유권 확인 후 same-origin 바이너리 스트리밍을 사용하며, 변경 후 관리 로그 집계에서 `token=`·합성 메모·E2E 파일명은 0건이었다. provider 로그에는 계정·IP·요청 경로 메타데이터가 남으므로 접근·보존 범위 확인은 계속 필요하다. 개발 프로젝트에서 미완료 업로드 Storage 제거와 계정 전체 삭제를 합성 데이터로 검증했다. `pg_cron` 10분 일정은 활성 상태이고 실제 유지관리 요청이 HTTP 200을 반환한다. `pg_net`은 `extensions` schema에 설치했다. 개발 환경 Google OAuth 로그인과 수정한 콜백 흐름을 확인했다. 현재 Security Advisor WARN은 leaked password protection 비활성화 1건이며, `events`·`cleanup_jobs`의 RLS INFO 2건은 의도한 차단 설계다. 현재 조직 요금제는 Free이며 DB·Storage 복구 계획은 미확정이다. 실제 48시간 경과 후 재접속과 실제 기기 확인은 남아 있다.
 
 ## 1. 진행 순서
 
@@ -44,23 +44,23 @@
 ### 작업
 
 - [x] Next.js·TypeScript 프로젝트를 만들고 공식 문서 기준으로 버전을 고정한다. lockfile 생성과 `npm ci`를 확인했다.
-- [x] lint·typecheck·test·integration·e2e·build 스크립트를 정의한다. lint·typecheck·단위 테스트 14개·원격 integration 6개·E2E 8개(소개, 목록 응답 순서, 업로드·보관/ZIP, 메모 복구, 만료 후 반출, 분석 동의, 삭제)·build 통과.
+- [x] lint·typecheck·test·integration·e2e·build 스크립트를 정의한다. lint·typecheck·단위 테스트 15개·원격 integration 6개·E2E 8개(소개, 목록 응답 순서, 업로드·보관/ZIP, 메모 복구, 만료 후 반출, 분석 동의, 삭제)·build 통과.
 - [x] `.env.example`과 개발 실행 설명을 작성한다.
 - [x] 개발용 Supabase 환경을 만들고 운영 환경과 분리한다. 서울 지역의 `recall-memory` (`mgedpimvznbatmipaacn`)는 합성 데이터 검증 전용 개발 프로젝트다.
-- [ ] Google OAuth Web client를 만들고 Supabase Google provider·Site URL·localhost/127.0.0.1 callback URL을 설정해 실제 로그인을 확인한다. 로그인 버튼과 `/auth/confirm` code 교환은 구현했지만 Provider 설정과 실사용은 아직 확인하지 않았다.
+- [x] Google OAuth Web client와 Supabase Google provider·Site URL·localhost callback을 설정하고 실제 로그인을 확인했다. 첫 시도는 `127.0.0.1`에서 시작해 콜백이 `APP_BASE_URL`의 `localhost`로 이동하면서 세션 쿠키가 끊겼다. 콜백은 허용된 개발 loopback host로 되돌아가고 API Origin 검사도 개발 환경에서 loopback 주소를 허용하도록 수정했다.
 - [x] `profiles`, `trials`, `photos`, `events`, `cleanup_jobs` migration을 작성한다. 빈 로컬 DB와 새 원격 개발 DB에 적용했다. migration 파일 버전은 원격 적용 이력 `20261008045831`과 맞췄다.
 - [x] FK·UNIQUE·CHECK·인덱스와 DB 타입 생성을 반영한다. 원격 프로젝트의 실제 스키마에서 타입을 다시 생성해 클라이언트에 연결했다.
 - [x] 공개 테이블의 RLS와 최소 GRANT를 설정한다. 원격 SQL로 5개 테이블의 RLS·일반 사용자 쓰기 금지·익명 조회 금지를 확인했다.
 - [x] 비공개 버킷·Storage 접근 정책을 설정한다. `memory-assets` 비공개·10 MiB·지원 MIME 제한, 예약된 객체로 인증 업로드, 소유자 다운로드 허용·타 사용자 거부·만료 뒤 기존 파일 접근을 원격에서 확인했다.
 - [x] 일반 사용자 직접 DB 변경과 서버 전용 함수 실행을 차단한다. 원격 통합 테스트에서 두 계정 세션의 행 분리, 직접 UPDATE 거부, 타 사용자 함수 실행 거부, 익명 테이블 조회 및 RPC 거부를 확인했다.
-- [x] 요청별 서버 인증·소유권 확인·private no-store 캐시 정책을 공통 구현한다. 원격 세션 검증, 합성 사용자 브라우저 흐름, Storage 소유자 접근 및 타 사용자 차단을 확인했다. 실제 Google OAuth와 48시간 재접속은 남아 있다.
+- [x] 요청별 서버 인증·소유권 확인·private no-store 캐시 정책을 공통 구현한다. 원격 세션 검증, 합성 사용자 브라우저 흐름, Storage 소유자 접근 및 타 사용자 차단을 확인했다. 실제 48시간 재접속은 남아 있다.
 - [x] 서버 비밀 키가 클라이언트 번들에 들어가지 않는지 확인한다. 키가 설정된 운영 빌드 후 `.next/static`에서 값이 발견되지 않는 것을 확인했다.
 
 ### 완료 조건
 
 로그인·로그아웃·새로고침 후 세션이 정상 동작한다. 사용자 A와 B의 DB·Storage 접근이 분리되고, 공개용 키와 로그인 세션으로 서버 전용 변경을 우회할 수 없다. 빈 DB에서 migration을 적용해 같은 환경을 재구성할 수 있다.
 
-Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에 확인한다. 개발 callback 성공만으로 운영 환경까지 완료 처리하지 않는다.
+개발 환경에서 Google 계정 로그인을 확인했다. 운영 URL에서의 OAuth callback은 참여 실험 전에 별도로 확인한다.
 
 ## 4. P2 업로드와 사진 다시 보기
 
@@ -113,11 +113,11 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 - [x] 만료 이후 기존 ready 사진 조회·메모 수정·원본 다운로드를 허용하고 신규 업로드만 막는다. 만료 fixture 뒤 사진 행·메모·세션 기반 Storage 다운로드와 브라우저 ZIP 원본·메타데이터를 확인했다.
 - [x] 기간 내 최초 저장과 기간 이후 저장을 구분한다. 원격 통합 테스트에서 실험 중 `first_note_at <= ends_at`, 종료 후 첫 메모의 `first_note_at > ends_at`, 기존 보관 사진의 최초 시각 유지까지 확인했다.
 - [x] 계정 설정과 분석 동의 변경을 구현한다. E2E에서 기본 비동의, 동의 저장, 기록 확인, 철회 시 기존 이벤트 삭제와 이후 이벤트 미기록을 확인했다.
-- [x] 사용자가 요청하는 사진 삭제·계정 삭제 UI를 구현한다. E2E에서 보관 사진 삭제 접수·숨김, 계정 삭제 요청과 진행 토큰 기반 대기 상태를 확인했다. 실제 파일·계정 정리는 유지관리 worker가 비활성화되어 있어 별도 검증한다.
+- [x] 사용자가 요청하는 사진 삭제·계정 삭제 UI를 구현한다. E2E에서 보관 사진 삭제 접수·숨김, 계정 삭제 요청과 진행 토큰 기반 대기 상태를 확인했다. 실제 파일·계정 정리는 별도로 검증한다.
 - [x] deleting 상태·중복 방지 작업·Storage API 삭제·완료 상태를 검증한다. 원격 합성 사진에 중복 삭제 요청을 보내 같은 작업 ID·단일 큐 행을 확인하고, fixture로 실행 시각을 당겨 claim → Storage API remove → 완료 RPC 뒤 파일 제거·개인정보 비움·완료 상태를 확인했다.
-- [ ] 유지관리 Edge Function과 내부 인증·Cron·재시도 lease를 구성한다. 함수 배포와 미인증 POST의 401 응답을 확인했고 개발 DB의 `pg_cron`·`pg_net` 확장을 켰다. 2026-10-10 원격 확인에서 함수는 ACTIVE v1이지만 Vault의 두 설정값과 Cron 일정은 없다. 현재 연결은 DB 작업만 허용하고 Supabase CLI 관리 토큰도 없어 Edge Function secret을 설정할 수 없다.
-- [ ] 24시간 지난 미완료 업로드만 자동 정리한다. 원격 합성 통합 테스트에서 만료한 `uploading`·`failed`만 정리 큐에 넣고, 만료한 `ready` 보관·미보관 사진은 제외하는 `sweep_incomplete()`을 검증했다. 주기 실행과 Storage 삭제는 Cron·worker 설정 후 확인한다.
-- [x] 작업별 진행 토큰을 사용해 로그아웃 이후 계정 삭제 상태 확인을 구현한다. global sign-out 후 sessionStorage의 토큰으로 상태 API를 조회하고 대기 UI를 표시하는 E2E를 확인했다. 실제 삭제 작업 완료는 worker 활성화 후 별도 검증한다.
+- [x] 유지관리 Edge Function과 내부 인증·Cron·재시도 lease를 구성한다. 함수 배포와 미인증 POST의 401 응답, 원격 fixture의 lease 재시도를 확인했다. `recall-maintenance`가 10분 간격으로 활성 상태이고 실제 함수 HTTP 200을 확인했다. `pg_net`은 보안 advisor 경고를 해소하도록 `extensions` schema로 옮겼으며 Cron도 재활성화했다.
+- [x] 24시간 지난 미완료 업로드만 자동 정리한다. 합성 `uploading` 사진의 만료 시각을 당겨 실제 유지관리 함수를 실행했고 원본·썸네일 Storage 제거와 작업 완료를 확인했다. 정상 `ready` 사진은 유지했다. 계정 삭제 요청의 합성 사용자도 파일·프로필·메모·Auth 계정 제거까지 확인했다. 실제 24시간 대기 후 실행하는 벽시계 검증은 남아 있다.
+- [x] 작업별 진행 토큰을 사용해 로그아웃 이후 계정 삭제 상태 확인을 구현한다. global sign-out 후 sessionStorage의 토큰으로 상태 API를 조회하고 대기 UI를 표시하는 E2E를 확인했다. 실제 삭제 작업 완료는 별도 검증한다.
 - [x] 앱 소스·동의된 분석 이벤트·최근 합성 검증의 로그 노출을 확인한다. 직접 logger·console 기록과 외부 분석 SDK가 없고, 행동 이벤트는 이벤트 이름·사진 ID·방문 맥락만 보낸다. 2026-10-10 post-change 원격 로그 10분 집계에서 테스트 파일명·메모 문구·`token=`은 없었다.
 - [ ] 운영 로그의 접근·보존 범위와 요청 경로·계정·IP 메타데이터 처리 방침을 확인한다. Supabase managed logs에 계정·IP·요청 경로 메타데이터가 남고, [공식 문서](https://supabase.com/docs/guides/troubleshooting/check-usage-for-monthly-active-users-mau-MwZaBs)는 Free 요금제 로그 접근 기간을 1일로 안내한다. 프로젝트 접근 역할과 실제 설정, 호스팅 로그는 아직 확인하지 않았다.
 - [ ] DB와 파일의 복구 범위, 운영 종료 시 반출 안내 계획을 확인한다. Supabase 조직이 Free 요금제인 것을 확인했다. [공식 백업 문서](https://supabase.com/docs/guides/platform/backups)는 자동 일일 백업을 유료 요금제로 설명하고, Free에는 정기 오프사이트 DB export를 권하며 Storage API 객체는 DB 백업에서 제외한다고 안내한다. DB·Storage 백업 및 복구 연습은 아직 없다.
@@ -148,12 +148,13 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 
 ### 작업
 
+- [x] Cloudflare Workers + vinext를 로컬 배포 대상으로 선택하고 설정한다. 기본 dev/build/typecheck 스크립트, Workers Images binding, Node.js compatibility와 Worker types를 연결했다. 실제 배포·OAuth·이미지 binding 운영 검증은 P5에 남는다.
 - [ ] 선택한 호스팅에 서버 런타임·환경변수·Auth 콜백을 구성한다.
 - [ ] 운영 DB migration과 비공개 버킷 정책을 확인한다.
 - [ ] 실제 운영 URL에서 Google OAuth 로그인과 모바일 흐름을 확인한다.
 - [ ] 테스트 계정으로 보존·반출·삭제를 검증한 뒤 데이터 정리한다.
 - [ ] 안내 문구와 분석 동의가 실제 정책과 일치하는지 확인한다.
-- [ ] 실패 업로드·삭제 실패·저장량을 확인할 운영 수단을 준비한다.
+- [x] 실패 업로드·삭제 실패·저장량을 확인할 운영 수단을 준비한다. [supabase/operations.sql](supabase/operations.sql)의 읽기 전용 집계 4개를 원격 개발 프로젝트에서 실행해 Cron·삭제 작업·사진 수명주기·Storage 객체 수/용량 결과를 확인했다. 수동 점검이며 alert는 구성하지 않았다.
 - [ ] 사전 인터뷰 후 실제 불편을 겪는 참여자 8~12명을 모집한다.
 - [ ] 사용 실험을 실행하고 연구자 요청 방문을 별도로 기록한다.
 - [ ] 시작 후 72시간까지 자발적 재방문을 관찰한다.
@@ -214,7 +215,7 @@ Google provider 설정과 실제 Google 계정 로그인을 참여 실험 전에
 ## 12. 실행 기반 검증과 원격 DB 전환 — 2026년 10월 8일
 
 - 통과: 의존성 설치·lockfile 생성·`npm ci`, lint·전체 typecheck·단위 테스트 8개·Next.js 16.4.0 운영 빌드·E2E 2개(소개 및 빈 목록 복구·업로드 검증/재시도·두 사진 탐색·합성 사진 보관/만료 후 ZIP).
-- 보안 패치: Sharp 0.35.5·Vitest 4.1.11. `npm audit --omit=dev` 0건. lint 도구의 미패치 간접 의존성 경고 5건은 남아 있다.
+- 보안 패치: Sharp 0.35.5·Vitest 4.1.11. `npm audit --omit=dev` 0건. 개발·빌드 도구의 전이 취약점 12건(중간 4, 높음 8)은 남아 있으며 npm 강제 수정은 vinext 호환 버전을 깨뜨려 적용하지 않았다.
 - 통과: CLI가 생성한 최초 migration을 빈 로컬 DB에 적용하고 실제 스키마 타입을 생성해 브라우저·SSR·서버·proxy 클라이언트에 연결했다.
 - 사용자 지시: 로컬 DB 대신 원격 Supabase 개발 프로젝트를 생성해 연결한다. 로컬 DB는 데이터 볼륨을 보존한 채 중지했다.
 - 원격 생성·적용: 사용자가 조직·월 $0 비용을 확인하고 이름을 `recall-memory`로 지정했다. `JooJeongwon` 조직·서울 지역의 프로젝트 ID는 `mgedpimvznbatmipaacn`이다. 최초 migration 적용, 원격 타입 재생성, `.env.local`의 프로젝트 ID·URL·공개 키 연결을 마쳤다.
@@ -308,3 +309,19 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 변경: 원격 통합 테스트는 권한·업로드·메모·만료 및 정리 대상·삭제 완료·lease 재시도의 6개로, 사진 E2E는 응답 순서 2개와 업로드부터 보관·ZIP까지의 흐름, 메모 복구, 만료 후 반출, 분석 동의, 삭제의 5개로 나눴다. 각 테스트가 새 합성 계정·파일을 생성하며 공통 fixture가 정리한다. 정리 오류도 테스트 실패로 보고한다.
 - 검증: lint, typecheck, 단위 테스트 14개, 원격 통합 테스트 6개, 모바일 Chromium E2E 8개(소개 포함), 운영 build, `git diff --check` 통과.
 - 제한: Google OAuth 실제 로그인·실제 48시간 재접속·실기기·Cron·계정 전체 제거는 이번 작업에서 확인하지 않았다. 기존 미완료 항목은 그대로 두고 MVP 완료로 표시하지 않는다.
+
+## 25. 배포 전 P4 유지관리와 운영 조회 검증 — 2026년 10월 10일
+
+- 통과: 합성 미완료 업로드를 대상으로 유지관리 함수를 실행해 원본·썸네일 Storage 객체 제거와 cleanup job 완료를 확인했다. 정상 `ready` 사진은 유지했다.
+- 통과: 합성 계정 삭제 요청 후 Storage 객체·프로필·메모·사진과 Auth 사용자가 제거되고 작업이 완료되는 것을 확인했다. 테스트 데이터는 정리했다.
+- 변경: `pg_net`을 `extensions` schema에 재설치해 보안 advisor 경고를 해소했다. 큐가 비었고 Database Webhook이 없는 것을 확인한 뒤 변경했으며, Cron을 재활성화하고 10분 schedule 및 HTTP 200 응답을 재확인했다.
+- 통과: `supabase/operations.sql`의 네 읽기 전용 집계 쿼리를 원격 개발 DB에서 실행했다. 결과에는 사용자 ID와 파일명이 포함되지 않는다.
+- 검증: lint, typecheck, 단위 테스트 15개, 원격 통합 테스트 6개, 모바일 Chromium E2E 8개, 운영 build, `git diff --check` 통과. `npm audit --omit=dev`는 0건이다. 전체 `npm audit`의 high 5건은 lint 개발 도구의 `braces` 간접 의존성이고, 자동 수정은 현재 `eslint-config-next`를 하위 호환되지 않는 v14로 낮추므로 적용하지 않았다.
+- 제한: 24시간의 실제 경과, 실패 Storage 제거 후 실제 worker 재시도, 48시간 보존 재접속과 실기기 네트워크는 미검증이다. 운영 호스트와 운영 Supabase 프로젝트가 정해지지 않아 P5의 production migration·OAuth·모바일 흐름도 수행하지 않았다.
+
+## 26. Workers + vinext 로컬 이관 — 2026년 10월 11일
+
+- 변경: 기본 `dev`·`build`·`start` 스크립트를 vinext/Vite로 바꾸고, typed Cloudflare Worker 설정·Assets/Images binding·Workers 타입 검사를 추가했다. Node.js 22.18 이상이 필요하다.
+- 변경: Sharp는 Worker 런타임에서 제거하고 테스트 fixture용 dev dependency로 옮겼다. Images binding으로 이미지 정보·정적 형식·40MP 상한을 확인하고 WebP thumbnail을 만든다. binding 오류는 업로드 원본을 정리하지 않도록 재시도 가능한 503으로 처리한다.
+- 검증: `vinext check` 100%, lint, `npm run typecheck`, `npm run build`, `git diff --check`, `npm audit --omit=dev`(0건). Worker artifact에서 Supabase server secret이 포함되지 않는 것도 확인했다.
+- 제한: unit/integration/E2E는 다시 실행하지 않았다. 개발 Supabase를 사용하는 Worker는 배포하지 않았다. 운영 Supabase·Google OAuth·Secrets 설정이 P5에 남아 있다. 전체 dev/build 도구 감사는 취약점 12건(중간 4, 높음 8)을 보고한다.

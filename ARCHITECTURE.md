@@ -2,17 +2,18 @@
 
 이 문서는 `PROJECT.md`의 MVP를 실제 웹앱으로 구현하기 위한 기본 설계다. 사진 파일과 메타데이터를 분리하고, 메모와 보관 상태는 하나의 DB 행에 묶어 저장한다. 실험 기간과 사진 보존 수명을 분리하는 것이 핵심이다.
 
-아래 구성은 구현 기본안이며 배포된 시스템의 현황이 아니다. 특정 호스팅 업체와 요금제는 아직 정하지 않는다. 2026년 10월 8일 초기 화면·API·DB 함수·유지관리 소스를 작성했으며, 실행 환경과 실제 연결 검증 상태는 문서 마지막 절과 `README.md`를 참고한다.
+웹 런타임은 Cloudflare Workers + vinext로 정했다. 현재 저장소에 로컬 설정이 있으며 배포된 상태는 아니다. 2026년 10월 8일 초기 화면·API·DB 함수·유지관리 소스를 작성했으며, 실행 환경과 실제 연결 검증 상태는 문서 마지막 절과 `README.md`를 참고한다.
 
 ## 1. 구성과 책임
 
 ```mermaid
 flowchart TD
-    Browser["모바일 웹 브라우저"] --> App["Next.js 웹앱과 API"]
+    Browser["모바일 웹 브라우저"] --> App["vinext on Cloudflare Workers"]
     Browser --> Auth["Supabase Auth"]
     App --> Auth
     App --> DB["PostgreSQL 메모와 상태"]
     App --> Storage["비공개 사진 Storage"]
+    App --> Images["Cloudflare Images 변환 binding"]
     Browser -->|"세션으로 예약 파일 업로드"| Storage
     App -->|"세션 권한 확인 후 이미지 스트리밍"| Browser
     Cron["Cron 유지관리"] --> Worker["Edge Function 삭제와 복구"]
@@ -23,7 +24,7 @@ flowchart TD
 | 구성요소 | 책임 |
 | --- | --- |
 | 브라우저 | 사용자가 파일 선택, 사진 보기, 메모 작성, 원본·메모 ZIP 생성 |
-| Next.js | 화면 렌더링, 검증된 로그인, 요청 검증, 소유권 확인, API 제공 |
+| Cloudflare Workers + vinext | 화면 렌더링, 검증된 로그인, 요청 검증, 소유권 확인, API 제공 |
 | Auth | Google OAuth와 세션 발급·갱신 |
 | PostgreSQL | 사용자, 실험 시각, 파일 상태, 메모·보관 상태, 제한·삭제 작업 |
 | Storage | 원본과 서버가 만든 썸네일을 비공개로 저장 |
@@ -33,15 +34,15 @@ flowchart TD
 
 ## 2. 기술과 배포 경계
 
-웹앱은 Next.js App Router·TypeScript, DB·Auth·파일은 Supabase를 기본으로 한다. Node.js Route Handlers에서 이미지 디코딩·썸네일 생성을 수행한다. Sharp 등 선택한 이미지 라이브러리와 호스팅의 Node.js 지원을 초기 배포에서 확인한다.
+웹앱은 vinext의 Next.js 호환 App Router와 Cloudflare Workers를 사용하며 DB·Auth·파일은 Supabase에 둔다. 업로드 검증 API는 Cloudflare Images binding으로 형식·크기·픽셀 수를 확인하고 썸네일을 WebP로 변환한다. 원본·썸네일은 계속 Supabase Storage에만 저장한다. 이미지는 변환 과정에서 Cloudflare 서비스에 전달되며 Images 변환량 제한과 데이터 처리 정책을 참여자 사진을 받기 전에 검토한다.
 
 파일은 브라우저에서 사용자 세션으로 Storage에 직접 올려 웹앱 호스팅의 요청 본문 제한을 피한다. Storage RLS는 활성 사용자 소유의 미완료 예약 객체에만 업로드를 허용한다. 업로드 확정 API는 파일 자체가 아니라 업로드 ID를 받는다. 서버가 Storage의 파일을 읽어 검증한 후 `ready`로 확정한다.
 
 사진 조회와 내보내기는 같은 출처의 인증 API를 통해 본인 파일을 스트리밍한다. 브라우저는 원본을 받아 ZIP을 만들며 서버가 ZIP을 HTTP 응답 본문으로 반환하지 않는다. 첫 MVP는 파일당 10 MiB와 개별 내보내기로 메모리 사용을 제한한다.
 
-SSR 세션은 `@supabase/ssr` 공식 가이드를 따른다. 사용자별 서버 클라이언트는 요청마다 만들며 요청 간 공유하지 않는다. 선택한 Next.js 버전에 맞춰 `proxy.ts` 또는 `middleware.ts`를 사용한다.
+SSR 세션은 `@supabase/ssr` 공식 가이드를 따른다. 사용자별 서버 클라이언트는 요청마다 만들며 요청 간 공유하지 않는다. 인증 쿠키 갱신은 `src/proxy.ts`에서 수행한다.
 
-호스팅 선정 시 확인할 것은 서버 함수 실행 시간, 이미지 처리 메모리, 10 MiB 파일 읽기·검증 가능 여부, 비밀 환경변수, 로그 접근과 비용이다. 무료 요금제로 모든 보존 약속을 충족한다고 가정하지 않는다.
+Workers 호환성 날짜는 2026-10-10이며 `nodejs_compat`가 적용된다. 배포 전에 런타임 secrets, Google OAuth callback, 관리 로그 접근, Images quota와 가격을 확인한다. 무료 요금제로 모든 보존 약속을 충족한다고 가정하지 않는다.
 
 ## 3. 저장소 구조
 
@@ -433,11 +434,13 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security): 소유권 정책과 인덱스.
 - [Supabase 새 테이블 API 노출 변경](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically): 새 테이블의 명시적 GRANT 확인.
 - [Supabase Changelog](https://supabase.com/changelog): 구현 시 관련 변경 점검.
+- [Cloudflare Images binding](https://developers.cloudflare.com/images/optimization/binding/): Worker 원시 바이트 이미지 검사·변환과 로컬 binding 동작.
+- [vinext Cloudflare 배포](https://vinext.dev/docs/deploying/cloudflare): Cloudflare Workers 배포 설정.
 - [MDN 파일 입력](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file): 사용자가 선택한 파일 접근과 형식 힌트.
 
-## 14. 구현 전 남은 선택
+## 14. 배포 전 남은 선택
 
-실제 호스팅, 실행 버전, Google OAuth 클라이언트·redirect 설정, 비밀 키 형식, 운영 종료 고지·반출 유예 기간을 정한다. 이 선택이 핵심 사용자 흐름을 막지 않도록 로컬 데모와 도메인 구현은 먼저 진행한다. 실제 사용자 사진을 받기 전에는 보존·권한·반출 검증을 완료한다.
+Cloudflare Workers + vinext 로컬 설정은 있지만 Worker를 배포하지 않았다. 운영 Supabase 프로젝트, Google OAuth 클라이언트·redirect, 런타임 secrets, 운영 종료 고지·반출 유예 기간을 정한다. 실제 사용자 사진을 받기 전에는 보존·권한·반출 검증을 완료한다.
 
 ## 15. 초기 구현 상태
 
@@ -447,7 +450,7 @@ Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 �
 
 삭제 요청은 즉시 새 조회와 저장을 차단하지만 이미 발급된 업로드 토큰이 파일을 재생성하지 않도록 객체 제거를 약 2시간까지 지연할 수 있다. 계정 삭제는 사진 작업을 기다리고 DB 정리·Auth 제거까지 성공한 뒤 완료한다. 진행 확인 토큰은 탭 sessionStorage에 24시간까지 두며 서버에는 해시만 저장한다. 유지관리 Edge Function은 개발 프로젝트에 배포했고 `pg_cron`·`pg_net` 확장도 활성화했다. 내부 호출 비밀과 Cron은 미설정이라 자동 작업은 비활성 상태다. 함수는 런타임 제공 `SUPABASE_SECRET_KEYS`를 사용한다.
 
-후속 작업에서 npm 접속과 Docker 접근이 복구됐다. `package-lock.json` 생성과 `npm ci`, lint·전체 typecheck·단위 테스트 8개·Next.js 운영 빌드가 통과했다. 이후 모바일 소개와 합성 사진 업로드·보관/ZIP E2E 2개까지 통과했다. Sharp 0.35.5·Vitest 4.1.11로 보안 패치를 반영했으며 운영 의존성 audit은 0건이다. 개발용 lint 간접 의존성의 미패치 경고 5건은 남아 있다.
+후속 작업에서 npm 접속과 Docker 접근이 복구됐다. `package-lock.json` 생성과 `npm ci`, lint·전체 typecheck·단위 테스트 8개·Next.js 운영 빌드가 통과했다. 이후 모바일 소개와 합성 사진 업로드·보관/ZIP E2E 2개까지 통과했다. Sharp 0.35.5·Vitest 4.1.11로 보안 패치를 반영했으며 운영 의존성 audit은 0건이다. Cloudflare Workers + vinext 설정을 추가했고 vinext 호환성 검사·Worker typecheck·Worker 빌드는 통과했다. 전체 개발·빌드 의존성 감사의 12건(중간 4, 높음 8)은 남아 있다.
 
 로컬 최초 migration 적용을 확인한 뒤, 사용자의 지시에 따라 로컬 DB를 중지하고 원격 Supabase 전용 개발 프로젝트로 전환했다. `JooJeongwon` 조직·서울 지역의 `recall-memory` (`mgedpimvznbatmipaacn`)에 최초 migration을 적용하고 실제 원격 타입을 생성했다. 로컬 migration 파일 버전도 원격 이력 `20261008045831`과 맞췄다. DB RLS·GRANT·서버 함수 EXECUTE와 비공개 버킷을 확인했으며 보안 advisor의 경고·오류는 없었다.
 

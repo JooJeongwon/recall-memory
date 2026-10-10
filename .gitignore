@@ -6,7 +6,11 @@ playwright-report/
 test-results/
 .env*
 !.env.example
+.dev.vars*
 *.tsbuildinfo
 supabase/.temp/
 supabase/.branches/
 .DS_Store
+/dist/
+.vinext/
+.cloudflare/

@@ -4,7 +4,7 @@
 
 현재 저장소에 실행 코드가 있다는 전제를 두지 않는다. 이 문서 세트는 구현 명세이며, 문서에 등장하는 화면·API·테스트는 앞으로 구현해야 할 항목이다.
 
-초기 소스 작성 후에는 `ROADMAP.md`와 `README.md`의 검증 상태를 먼저 확인한다. 2026년 10월 8일 후속 작업에서 의존성 설치·lockfile·전체 타입 검사·빌드·두 사용자 원격 권한 검증·빈 목록 복구, HEIC·용량 초과 사전 거절, MIME 위장·손상·픽셀 초과 파일의 서버 거절 및 목록 제외, EXIF 보정 썸네일, 업로드 재시도와 예약 중복/한도 검증, 메모 500/501자 DB 경계·동시 수정 초안 보존·일시 저장 실패 후 재시도, 무효화된 서명 URL 오류 안내·내보내기 재시도, 분석 동의·철회 이벤트 정리, 보관 사진·계정 삭제 요청 UI와 진행 상태, 삭제 작업 중복 방지·Storage API 제거·완료 상태·재시도 lease, 실험 내·외 최초 메모 시각 구분이 통과했다. 유지관리 Edge Function은 원격 개발 프로젝트에 배포되어 미인증 호출을 401로 거절하지만 내부 호출 비밀과 Cron은 아직 설정하지 않았다. 원격 DB 시간 fixture로 만료 후 신규 예약·확정 거절, 최초 실험 시각 설정, 기존 ready 사진의 메모·원본 접근, 만료 후 보관함과 ZIP 반출도 확인했다. 자동 삭제·계정 전체 제거, Google OAuth 실제 로그인·48시간 경과 후 재접속은 미검증이며 상태는 로드맵을 기준으로 갱신한다. DB는 사용자의 지시에 따라 원격 Supabase 개발 프로젝트를 사용한다. 파일이 존재한다는 이유로 해당 화면·API를 검증 완료로 보지 않는다.
+초기 소스 작성 후에는 `ROADMAP.md`와 `README.md`의 검증 상태를 먼저 확인한다. 2026년 10월 8일 후속 작업에서 의존성 설치·lockfile·전체 타입 검사·빌드·두 사용자 원격 권한 검증·빈 목록 복구, HEIC·용량 초과 사전 거절, MIME 위장·손상·픽셀 초과 파일의 서버 거절 및 목록 제외, EXIF 보정 썸네일, 업로드 재시도와 예약 중복/한도 검증, 메모 500/501자 DB 경계·동시 수정 초안 보존·일시 저장 실패 후 재시도, 무효화된 서명 URL 오류 안내·내보내기 재시도, 분석 동의·철회 이벤트 정리, 보관 사진·계정 삭제 요청 UI와 진행 상태, 삭제 작업 중복 방지·Storage API 제거·완료 상태·재시도 lease, 실험 내·외 최초 메모 시각 구분이 통과했다. 유지관리 Edge Function은 원격 개발 프로젝트에 배포되어 미인증 호출을 401로 거절한다. 2026년 10월 10일 Vault URL을 수정하고 10분 Cron을 등록했으며 첫 함수 응답 HTTP 200을 확인했다. 원격 DB 시간 fixture로 만료 후 신규 예약·확정 거절, 최초 실험 시각 설정, 기존 ready 사진의 메모·원본 접근, 만료 후 보관함과 ZIP 반출도 확인했다. Google OAuth는 개발 환경에서 실제 로그인에 성공했다. 첫 시도는 `127.0.0.1`에서 `APP_BASE_URL`의 `localhost`로 이동해 세션 쿠키가 끊겼고, 콜백과 개발 환경 Origin 검사를 허용된 loopback host에 맞춰 수정했다. 실제 48시간 재접속, 자동 Storage 정리·계정 전체 제거는 미검증이며 상태는 로드맵을 기준으로 갱신한다. DB는 사용자의 지시에 따라 원격 Supabase 개발 프로젝트를 사용한다. 파일이 존재한다는 이유로 해당 화면·API를 검증 완료로 보지 않는다.
 
 ## 1. 먼저 읽을 문서
 
@@ -44,17 +44,17 @@ AI 요약·추천·감정 추정, 얼굴 인식, 중복 제거, 자동 삭제, �
 
 | 영역 | 기본안 |
 | --- | --- |
-| 웹앱 | Next.js App Router, React, TypeScript strict |
+| 웹앱 | Next.js 호환 App Router (vinext), React, TypeScript strict |
 | UI | 모바일 우선 반응형 CSS, 필요하면 Tailwind CSS |
 | 입력 검증 | Zod 등 하나의 검증 라이브러리 |
 | 계정 | Supabase Auth Google OAuth |
 | DB | Supabase PostgreSQL |
 | 사진 파일 | Supabase Storage 비공개 버킷 |
-| 서버 API | Next.js Route Handlers, Node.js 런타임 |
+| 서버 API | vinext Route Handlers, Cloudflare Workers |
 | 유지관리 | Supabase Edge Function과 Cron, 삭제 재시도·미완료 업로드 정리만 담당 |
 | 검증 | Vitest, Playwright, 실제 DB·Storage 통합 검증 |
 
-버전은 구현 시작 시 공식 문서와 보안 업데이트를 확인한 뒤 고정하고 lockfile을 커밋한다. 문서만 보고 임의의 최신 버전 번호를 만들어 쓰지 않는다. Next.js의 `proxy.ts`/`middleware.ts` 명명과 Supabase SSR 세션 처리도 선택한 버전의 공식 예제를 따른다.
+로컬·호스팅 런타임은 Cloudflare Workers + vinext로 선택했다. 버전은 구현 시작 시 공식 문서와 보안 업데이트를 확인한 뒤 고정하고 lockfile을 커밋한다. 문서만 보고 임의의 최신 버전 번호를 만들어 쓰지 않는다. vinext가 지원하는 Next.js API와 Supabase SSR 세션 처리는 선택한 버전의 공식 예제를 따른다.
 
 별도 마이크로서비스, Redis, 범용 메시지 큐, 외부 AI API는 추가하지 않는다. 직접 구현할 필요가 없는 인증·파일 저장소도 새로 만들지 않는다.
 

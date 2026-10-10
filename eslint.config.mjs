@@ -5,5 +5,5 @@ import nextTypescript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "next-env.d.ts", "supabase/functions/**", "src/types/database.ts"]),
+  globalIgnores([".next/**", ".cloudflare/**", "next-env.d.ts", "supabase/functions/**", "src/types/database.ts"]),
 ]);

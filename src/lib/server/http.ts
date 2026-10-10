@@ -14,13 +14,29 @@ const messages: Record<string, string> = {
 export class ApiError extends Error {
   constructor(public status: number, public code: string, public details?: unknown) { super(code); }
 }
+export function isAllowedAppOrigin(origin: string | null) {
+  const configured = process.env.APP_BASE_URL;
+  if (!configured || !origin) return false;
+  const base = new URL(configured);
+  let candidate: URL;
+  try { candidate = new URL(origin); } catch { return false; }
+  if (candidate.origin === base.origin) return true;
+  const localHosts = ["localhost", "127.0.0.1"];
+  return process.env.NODE_ENV === "development" && localHosts.includes(base.hostname) &&
+    localHosts.includes(candidate.hostname) && candidate.protocol === base.protocol && candidate.port === base.port;
+}
+export function requestOrigin(request: Request) {
+  const host = request.headers.get("host") ?? request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  if (!host) return new URL(request.url).origin;
+  const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ?? new URL(request.url).protocol.slice(0, -1);
+  return `${protocol}://${host}`;
+}
 export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 export function assertOrigin(request: Request) {
-  const configured = process.env.APP_BASE_URL;
-  if (!configured) throw new ApiError(503, "NOT_CONFIGURED");
-  if (request.headers.get("origin") !== new URL(configured).origin)
+  if (!process.env.APP_BASE_URL) throw new ApiError(503, "NOT_CONFIGURED");
+  if (!isAllowedAppOrigin(request.headers.get("origin")))
     throw new ApiError(403, "INVALID_ORIGIN");
 }
 export async function input<T>(request: Request, schema: ZodType<T>): Promise<T> {
