@@ -48,8 +48,10 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     await consent.check();
     const optInSave = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/me/preferences" &&
       response.request().method() === "PATCH" && response.ok());
-    await Promise.all([optInSave, page.getByRole("button", { name: "설정 저장" }).click()]);
+    const [preferencesResponse] = await Promise.all([optInSave, page.getByRole("button", { name: "설정 저장" }).click()]);
+    expect(await preferencesResponse.json()).toMatchObject({ analytics_consent: true });
     await expect(page.getByRole("status")).toHaveText("설정을 저장했어요.");
+    await expect(consent).toBeChecked();
     expect((await admin.from("profiles").select("analytics_consent").eq("user_id", userId).single()).data?.analytics_consent)
       .toBe(true);
 
@@ -153,9 +155,21 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
     await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
 
+    let failThumbnailOnce = true;
+    const thumbnailRoute = /\/api\/photos\/[^/]+\/asset$/;
+    await page.route(thumbnailRoute, async (route) => {
+      if (failThumbnailOnce) {
+        failThumbnailOnce = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+      } else await route.continue();
+    });
     await page.goto("/memories");
     await expect(page.getByRole("heading", { name: "보관함" })).toBeVisible();
     await expect(page.getByText("다시 만난 순간을 기억해요.")).toBeVisible();
+    await expect(page.getByText("사진을 열어 확인해주세요.")).toBeVisible();
+    await page.getByRole("button", { name: "다시 불러오기" }).click();
+    await expect(page.getByRole("img", { name: "보관한 사진" }).first()).toBeVisible();
+    await page.unroute(thumbnailRoute);
     await page.getByRole("link", { name: "사진 열기" }).click();
     await expect(page.getByRole("button", { name: "사진과 메모 가져가기" })).toBeVisible();
     const [download] = await Promise.all([
