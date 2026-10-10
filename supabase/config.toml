@@ -416,7 +416,3 @@ enabled = true
 
 [functions.maintenance]
 verify_jwt = false
-
-[auth.email.template.magic_link]
-subject = "기억할 권리 인증번호"
-content_path = "./supabase/templates/otp.html"

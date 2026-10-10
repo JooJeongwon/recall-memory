@@ -24,7 +24,7 @@ flowchart TD
 | --- | --- |
 | 브라우저 | 사용자가 파일 선택, 사진 보기, 메모 작성, 원본·메모 ZIP 생성 |
 | Next.js | 화면 렌더링, 검증된 로그인, 요청 검증, 소유권 확인, API 제공 |
-| Auth | 이메일 OTP와 세션 발급·갱신 |
+| Auth | Google OAuth와 세션 발급·갱신 |
 | PostgreSQL | 사용자, 실험 시각, 파일 상태, 메모·보관 상태, 제한·삭제 작업 |
 | Storage | 원본과 서버가 만든 썸네일을 비공개로 저장 |
 | 유지관리 함수 | 사용자가 요청한 삭제 재시도, 24시간 지난 미완료 업로드 정리 |
@@ -435,7 +435,7 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 
 ## 14. 구현 전 남은 선택
 
-실제 호스팅, 실행 버전, OTP 발송 설정, 비밀 키 형식, 운영 종료 고지·반출 유예 기간을 정한다. 이 선택이 핵심 사용자 흐름을 막지 않도록 로컬 데모와 도메인 구현은 먼저 진행한다. 실제 사용자 사진을 받기 전에는 보존·권한·반출 검증을 완료한다.
+실제 호스팅, 실행 버전, Google OAuth 클라이언트·redirect 설정, 비밀 키 형식, 운영 종료 고지·반출 유예 기간을 정한다. 이 선택이 핵심 사용자 흐름을 막지 않도록 로컬 데모와 도메인 구현은 먼저 진행한다. 실제 사용자 사진을 받기 전에는 보존·권한·반출 검증을 완료한다.
 
 ## 15. 초기 구현 상태
 
@@ -443,12 +443,12 @@ Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 �
 
 5개 테이블·제약·인덱스·최소 GRANT·RLS·비공개 버킷·서버 전용 SECURITY INVOKER 함수의 원본 SQL을 작성했다. profile → trial → photo 순서로 잠그며 메모 수정과 삭제를 직렬화한다. 검증 실패·만료 경계의 업로드 정리는 DB 결과로 커밋하여 예외 롤백 때문에 정리 요청이 사라지지 않게 했다. 네트워크 오류는 업로드 lease를 반환하고 재시도를 허용한다.
 
-삭제 요청은 즉시 새 조회와 저장을 차단하지만 이미 발급된 업로드 토큰이 파일을 재생성하지 않도록 객체 제거를 약 2시간까지 지연할 수 있다. 계정 삭제는 사진 작업을 기다리고 DB 정리·Auth 제거까지 성공한 뒤 완료한다. 진행 확인 토큰은 탭 sessionStorage에 24시간까지 두며 서버에는 해시만 저장한다. 유지관리 Edge Function은 개발 프로젝트에 배포했지만 내부 호출 비밀과 Cron은 구성하지 않아 자동 작업은 비활성 상태다. 함수는 런타임 제공 `SUPABASE_SECRET_KEYS`를 사용한다.
+삭제 요청은 즉시 새 조회와 저장을 차단하지만 이미 발급된 업로드 토큰이 파일을 재생성하지 않도록 객체 제거를 약 2시간까지 지연할 수 있다. 계정 삭제는 사진 작업을 기다리고 DB 정리·Auth 제거까지 성공한 뒤 완료한다. 진행 확인 토큰은 탭 sessionStorage에 24시간까지 두며 서버에는 해시만 저장한다. 유지관리 Edge Function은 개발 프로젝트에 배포했고 `pg_cron`·`pg_net` 확장도 활성화했다. 내부 호출 비밀과 Cron은 미설정이라 자동 작업은 비활성 상태다. 함수는 런타임 제공 `SUPABASE_SECRET_KEYS`를 사용한다.
 
 후속 작업에서 npm 접속과 Docker 접근이 복구됐다. `package-lock.json` 생성과 `npm ci`, lint·전체 typecheck·단위 테스트 8개·Next.js 운영 빌드가 통과했다. 이후 모바일 소개와 합성 사진 업로드·보관/ZIP E2E 2개까지 통과했다. Sharp 0.35.5·Vitest 4.1.11로 보안 패치를 반영했으며 운영 의존성 audit은 0건이다. 개발용 lint 간접 의존성의 미패치 경고 5건은 남아 있다.
 
 로컬 최초 migration 적용을 확인한 뒤, 사용자의 지시에 따라 로컬 DB를 중지하고 원격 Supabase 전용 개발 프로젝트로 전환했다. `JooJeongwon` 조직·서울 지역의 `recall-memory` (`mgedpimvznbatmipaacn`)에 최초 migration을 적용하고 실제 원격 타입을 생성했다. 로컬 migration 파일 버전도 원격 이력 `20261008045831`과 맞췄다. DB RLS·GRANT·서버 함수 EXECUTE와 비공개 버킷을 확인했으며 보안 advisor의 경고·오류는 없었다.
 
-`.env.local`에는 개발 프로젝트 ID·URL·공개 키·서버 키를 설정했다. 원격 통합 테스트에서 두 사용자 Auth 세션, RLS 행 분리, 직접 테이블 쓰기 및 서버 전용 함수 차단, 업로드 재요청 중복 방지와 20장 한도, 첫 사진 확정 시 실험 시각 설정, 메모 첫 공백 거절·500자 저장·501자 거절, 실험 내·외 최초 메모 시각 구분이 통과했다. 모바일 E2E에서 분석 동의 저장, 철회 시 기존 이벤트 삭제와 이후 이벤트 미기록, 보관 사진 삭제 요청·숨김, 계정 삭제 진행 토큰과 대기 UI를 확인했다. 별도 원격 합성 사진 통합 테스트에서 삭제 큐 중복 방지, 작업 claim, Storage API로 원본·썸네일 제거, 완료 RPC의 사진 개인정보 정리와 작업 완료를 확인했다. 실패 결과의 재시도 상태·이전 lease 거절·새 lease 재claim도 검증했다. 유지관리 함수는 개발 프로젝트에 배포했으며 인증 없는 요청이 401로 거절됨을 확인했다. 내부 호출 비밀과 Cron을 구성하지 않아 자동 삭제와 계정 전체 DB/Auth 제거는 검증하지 않았다. 빈 목록 복구·HEIC/10 MiB 초과 사전 거절·Storage 전송 실패 후 재시도·두 사진 탐색도 확인했다. MIME 위장 JPEG·손상 PNG·40,008,000픽셀 PNG의 서버 확정 거절·목록 제외도 검증했다. 이미지 검증 단위 테스트도 10 MiB 바이트 한도를 확인했다. 방향 6인 합성 JPEG로 방향 보정 WebP 썸네일과 EXIF 제거를 검증했다. 동시 수정 E2E에서는 최신 메모 표시와 사용자 초안 보존·재저장을 확인했고, 일시 저장 실패 뒤 입력·기존 DB 내용을 유지해 재시도하는 흐름도 통과했다. DB 시간 fixture 만료 테스트에서 신규 예약·만료 후 확정 거절, 기존 ready 사진의 메모 수정·원본 접근을 확인했고, 브라우저 E2E로 만료 후 ZIP 반출까지 확인했다. 서버 키가 브라우저 정적 번들에 포함되지 않는 것도 운영 빌드 결과에서 확인했다.
+`.env.local`에는 개발 프로젝트 ID·URL·공개 키·서버 키를 설정했다. 원격 통합 테스트에서 두 사용자 Auth 세션, RLS 행 분리, 직접 테이블 쓰기 및 서버 전용 함수 차단, 업로드 재요청 중복 방지와 20장 한도, 첫 사진 확정 시 실험 시각 설정, 메모 첫 공백 거절·500자 저장·501자 거절, 실험 내·외 최초 메모 시각 구분이 통과했다. 모바일 E2E에서 분석 동의 저장, 철회 시 기존 이벤트 삭제와 이후 이벤트 미기록, 보관 사진 삭제 요청·숨김, 계정 삭제 진행 토큰과 대기 UI를 확인했다. 별도 원격 합성 사진 통합 테스트에서 삭제 큐 중복 방지, 작업 claim, Storage API로 원본·썸네일 제거, 완료 RPC의 사진 개인정보 정리와 작업 완료를 확인했다. 실패 결과의 재시도 상태·이전 lease 거절·새 lease 재claim도 검증했다. 유지관리 함수는 개발 프로젝트에 배포했고 인증 없는 요청이 401로 거절됨을 확인했다. 2026년 10월 10일 `pg_cron`·`pg_net` 확장은 활성화했으나 내부 호출 비밀과 Cron 일정은 설정하지 않아 자동 삭제와 계정 전체 DB/Auth 제거는 검증하지 않았다. 빈 목록 복구·HEIC/10 MiB 초과 사전 거절·Storage 전송 실패 후 재시도·두 사진 탐색도 확인했다. MIME 위장 JPEG·손상 PNG·40,008,000픽셀 PNG의 서버 확정 거절·목록 제외도 검증했다. 이미지 검증 단위 테스트도 10 MiB 바이트 한도를 확인했다. 방향 6인 합성 JPEG로 방향 보정 WebP 썸네일과 EXIF 제거를 검증했다. 동시 수정 E2E에서는 최신 메모 표시와 사용자 초안 보존·재저장을 확인했고, 일시 저장 실패 뒤 입력·기존 DB 내용을 유지해 재시도하는 흐름도 통과했다. DB 시간 fixture 만료 테스트에서 신규 예약·만료 후 확정 거절, 기존 ready 사진의 메모 수정·원본 접근을 확인했고, 브라우저 E2E로 만료 후 ZIP 반출까지 확인했다. 서버 키가 브라우저 정적 번들에 포함되지 않는 것도 운영 빌드 결과에서 확인했다.
 
-Supabase 연결 도구는 Auth URL·메일 템플릿을 변경하지 못한다. 참여자 로그인을 시험하기 전 [Auth URL 설정](https://supabase.com/dashboard/project/mgedpimvznbatmipaacn/auth/url-configuration)에서 Site URL `http://localhost:3000`과 `localhost`·`127.0.0.1`의 `/auth/confirm` redirect URL을 지정해야 한다. 현재 조직은 Free 플랜이며, 2026-06-03 이후 생성된 Free 프로젝트는 기본 SMTP에서 메일 템플릿을 수정할 수 없다. 숫자 OTP를 메일 기본 흐름으로 쓰려면 자체 SMTP 설정이 필요하다 ([Supabase 변경 안내](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier)). 브라우저 E2E는 합성 세션으로 사진 보존·ZIP 반출과 무효화된 서명 URL 실패 후 재시도까지 통과했다. 실제 Auth 메일, 48시간 뒤 로그아웃·재로그인은 아직 검증하지 않았다. API의 JSON 결과는 Zod 계약으로 검증한다. 전체 사용자 흐름이나 MVP 완료를 의미하지 않는다.
+로그인 화면은 Supabase `signInWithOAuth({ provider: "google" })`로 Google 인증을 시작하고 `/auth/confirm`에서 PKCE code를 세션으로 교환한다. Google OAuth Web client를 만들고 Supabase Auth의 Google provider에 Client ID·Secret을 설정해야 실제 로그인이 된다. Google Console의 승인된 callback은 `https://mgedpimvznbatmipaacn.supabase.co/auth/v1/callback`, 앱 redirect allowlist에는 `http://localhost:3000/auth/confirm`과 `http://127.0.0.1:3000/auth/confirm`이 필요하다. Client Secret은 Supabase 설정에만 두고 앱 환경변수나 저장소에 넣지 않는다. 동일한 검증 이메일로 Google 로그인하면 Supabase Auth가 기존 계정에 identity를 자동 연결한다 ([identity linking](https://supabase.com/docs/guides/auth/auth-identity-linking)). 현재 개발 프로젝트의 Google provider는 꺼져 있으며(`external.google=false`), Provider 설정과 실제 Google 로그인, 48시간 뒤 로그아웃·재로그인은 아직 검증하지 않았다. 브라우저 E2E는 합성 세션으로 사진 보존·ZIP 반출과 무효화된 서명 URL 실패 후 재시도까지 통과했다. API의 JSON 결과는 Zod 계약으로 검증한다. 전체 사용자 흐름이나 MVP 완료를 의미하지 않는다.

@@ -1,6 +1,11 @@
--- 운영자가 프로젝트 URL과 Vault의 비밀을 구성한 뒤 개발 환경에서 먼저 확인합니다.
--- migration에 자동 포함하지 않습니다. Extensions에서 pg_cron, pg_net을 활성화해야 합니다.
+-- 프로젝트 URL과 Vault 비밀을 설정한 뒤 개발 환경에서 실행합니다.
+-- migration에 자동 포함하지 않습니다. Supabase Cron 설치 절차에 맞춰 확장을 준비합니다.
 -- Vault 이름: recall_project_url, recall_maintenance_secret.
+create extension if not exists pg_cron with schema pg_catalog;
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
+create extension if not exists pg_net;
+
 select cron.schedule('recall-maintenance', '*/10 * * * *', $$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'recall_project_url') || '/functions/v1/maintenance',
