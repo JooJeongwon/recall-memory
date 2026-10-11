@@ -552,8 +552,6 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
   box-shadow:
     0 12px 32px rgba(0,0,0,.14),
     0 2px 6px rgba(0,0,0,.08);
-  opacity: 0;
-  animation: photo-reveal var(--t-enter) var(--ease) forwards;
   will-change: transform, opacity;
 }
 .landing-photo img {
@@ -563,43 +561,22 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
   display: block;
 }
 .landing-photo-1 {
-  --photo-rotate: rotate(-3.5deg);
   left: 0; top: 18px;
   width: 57%;
   height: 250px;
-  transform: rotate(-3.5deg);
   z-index: 2;
-  animation-delay: 0ms;
 }
 .landing-photo-2 {
-  --photo-rotate: rotate(2.5deg);
   right: 0; top: 0;
   width: 41%;
   height: 172px;
-  transform: rotate(2.5deg);
   z-index: 3;
-  animation-delay: 110ms;
 }
 .landing-photo-3 {
-  --photo-rotate: rotate(-1.5deg);
   right: 12px; top: 186px;
   width: 40%;
   height: 118px;
-  transform: rotate(-1.5deg);
   z-index: 1;
-  animation-delay: 210ms;
-}
-.landing-content {
-  animation: content-in var(--t-enter) var(--ease) both;
-  animation-delay: 320ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-photo,
-  .landing-content {
-    animation: none;
-    opacity: 1;
-  }
 }
 
 .landing-content {
@@ -969,18 +946,8 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
   cursor: pointer;
   display: block;
   border-radius: 2px;
-  animation: tile-fade-in 380ms var(--ease) both;
+  /* Stagger and entrance handled by Motion */
 }
-/* Stagger first 9 tiles */
-.gallery-tile:nth-child(1)  { animation-delay:  0ms; }
-.gallery-tile:nth-child(2)  { animation-delay: 40ms; }
-.gallery-tile:nth-child(3)  { animation-delay: 80ms; }
-.gallery-tile:nth-child(4)  { animation-delay: 40ms; }
-.gallery-tile:nth-child(5)  { animation-delay: 80ms; }
-.gallery-tile:nth-child(6)  { animation-delay:120ms; }
-.gallery-tile:nth-child(7)  { animation-delay: 80ms; }
-.gallery-tile:nth-child(8)  { animation-delay:120ms; }
-.gallery-tile:nth-child(9)  { animation-delay:160ms; }
 
 .gallery-tile img {
   width: 100%;
@@ -1907,16 +1874,7 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.landing-topbar, .landing-collage, .landing-content > * {
-  animation: fade-up var(--t-enter) var(--ease) both;
-}
-.landing-topbar { animation-delay: 0ms; }
-.landing-collage { animation-delay: 50ms; }
-.landing-content > *:nth-child(1) { animation-delay: 150ms; }
-.landing-content > *:nth-child(2) { animation-delay: 200ms; }
-.landing-content > *:nth-child(3) { animation-delay: 250ms; }
-.landing-content > *:nth-child(4) { animation-delay: 300ms; }
-.landing-content > *:nth-child(5) { animation-delay: 340ms; }
+/* Landing entrance animations now handled by Motion for React */
 
 /* ── Reduced motion ──────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

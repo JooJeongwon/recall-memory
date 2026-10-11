@@ -2,13 +2,17 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { z } from "zod";
+import { motion } from "motion/react";
 import { requestApi, RequestError } from "@/lib/api";
 import { photoSchema, type Photo } from "@/lib/validation/contracts";
 import { demoImage, demoPhoto, isDemoMode } from "@/lib/demo";
 
+const ease = [0.22, 1, 0.36, 1] as const;
+
 export function Revisit() {
   const [photos, setPhotos] = useState<Photo[]>(isDemoMode() ? [demoPhoto] : []);
   const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
   const [message, setMessage] = useState(isDemoMode() ? "" : "사진을 불러오는 중…");
   const [retry, setRetry] = useState(0);
 
@@ -24,18 +28,25 @@ export function Revisit() {
       .catch((e: Error) => setMessage(e.message));
   }, [retry]);
 
+  const handlePrev = useCallback(() => {
+    setDirection(-1);
+    setIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  const handleNext = useCallback((len: number) => {
+    setDirection(1);
+    setIndex((i) => Math.min(len - 1, i + 1));
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp")
-        setIndex((i) => Math.max(0, i - 1));
-      if (e.key === "ArrowRight" || e.key === "ArrowDown")
-        setIndex((i) => Math.min(photos.length - 1, i + 1));
-      if (e.key === "Escape")
-        window.history.back();
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") handlePrev();
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") handleNext(photos.length);
+      if (e.key === "Escape") window.history.back();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [photos.length]);
+  }, [photos.length, handlePrev, handleNext]);
 
   const current = photos[index];
 
@@ -90,18 +101,18 @@ export function Revisit() {
         </button>
       </div>
 
-      {/* Photo area + side nav */}
       {current && (
         <ImmersivePhotoView
           key={current.id}
           photo={current}
+          direction={direction}
           index={index}
           total={photos.length}
           onPhotoUpdated={(updated) =>
             setPhotos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
           }
-          onPrev={() => setIndex((i) => Math.max(0, i - 1))}
-          onNext={() => setIndex((i) => Math.min(photos.length - 1, i + 1))}
+          onPrev={handlePrev}
+          onNext={() => handleNext(photos.length)}
           canPrev={index > 0}
           canNext={index < photos.length - 1}
         />
@@ -112,8 +123,7 @@ export function Revisit() {
 
 function ImmersivePhotoView({
   photo: initialPhoto,
-  index,
-  total,
+  direction,
   onPhotoUpdated,
   onPrev,
   onNext,
@@ -121,6 +131,7 @@ function ImmersivePhotoView({
   canNext,
 }: {
   photo: Photo;
+  direction: number;
   index: number;
   total: number;
   onPhotoUpdated: (p: Photo) => void;
@@ -231,11 +242,16 @@ function ImmersivePhotoView({
     } finally { setBusy(false); }
   }
 
+  const slideX = direction * 56;
+
   return (
     <>
-      {/* Photo area */}
-      <div
+      {/* Photo area — slides in from direction */}
+      <motion.div
         className="revisit-photo-area"
+        initial={{ opacity: 0, x: slideX, scale: 0.98 }}
+        animate={{ opacity: 1, x: 0, scale: 1 }}
+        transition={{ duration: 0.36, ease }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -279,10 +295,15 @@ function ImmersivePhotoView({
             <path d="M9 18l6-6-6-6"/>
           </svg>
         </button>
-      </div>
+      </motion.div>
 
-      {/* Note panel — always visible below photo */}
-      <div className="revisit-note-panel">
+      {/* Note panel */}
+      <motion.div
+        className="revisit-note-panel"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.38, delay: 0.08, ease }}
+      >
         <p className="revisit-note-question">이 순간을 기억하고 싶은 이유는?</p>
 
         {conflict && (
@@ -326,13 +347,15 @@ function ImmersivePhotoView({
           </span>
         </div>
 
-        <button
+        <motion.button
           className="revisit-save-btn"
           onClick={() => void save()}
           disabled={busy || !!conflict || overLimit || (!photo.preserved_at && !text.trim())}
+          whileTap={{ scale: 0.97 }}
+          transition={{ duration: 0.15 }}
         >
           {busy ? "저장 중…" : saved ? "✓ 기억으로 남겼어요" : "기억으로 남기기"}
-        </button>
+        </motion.button>
 
         {saveMsg && (
           <p className={`revisit-save-msg${!saved && saveMsg.includes("못") ? " error" : ""}`}>
@@ -354,7 +377,7 @@ function ImmersivePhotoView({
             </Link>
           </div>
         )}
-      </div>
+      </motion.div>
     </>
   );
 }
