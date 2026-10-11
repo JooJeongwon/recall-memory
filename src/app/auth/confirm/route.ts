@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const base = process.env.APP_BASE_URL;
+  const base = process.env.APP_BASE_URL?.replace(/^﻿/, "").trim();
   if (!base) return new Response("Auth 환경 설정이 필요합니다.", { status: 503, headers: { "Cache-Control": "private, no-store" } });
   const token_hash = url.searchParams.get("token_hash");
   const supabase = await createClient();
