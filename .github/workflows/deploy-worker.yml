@@ -1,0 +1,48 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recall-memory-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Cloudflare credentials
+        id: credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Add the CLOUDFLARE_API_TOKEN repository secret to enable deployment."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.credentials.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.credentials.outputs.ready == 'true'
+        with:
+          node-version: 22.18
+          cache: npm
+
+      - run: npm ci
+        if: steps.credentials.outputs.ready == 'true'
+
+      - name: Build and deploy
+        if: steps.credentials.outputs.ready == 'true'
+        run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: cf95f9f54fa787fe7eee0a23e3313e9e

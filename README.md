@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-2026년 10월 11일 Cloudflare Worker `recall-memory`를 [https://recall-memory.jwjoo0512.workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포하고 같은 원격 Supabase 프로젝트를 MVP 운영에도 사용하도록 연결했습니다. Supabase URL·공개 키·서버 비밀 키와 `APP_BASE_URL`은 Cloudflare secret binding으로 설정했습니다. `/`·`/login`은 HTTP 200, 비로그인 `/api/me`는 예상된 `401 UNAUTHENTICATED`를 반환합니다. Supabase가 Worker callback 주소를 허용하는 것도 사전 확인했지만, Worker에서 실제 Google 로그인을 끝내지는 않았습니다. GitHub 저장소 연결은 등록했지만 Workers Builds trigger는 아직 없어 `main` push가 자동 배포를 시작하지 않습니다.
+2026년 10월 11일 Cloudflare Worker `recall-memory`를 [https://recall-memory.jwjoo0512.workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포하고 같은 원격 Supabase 프로젝트를 MVP 운영에도 사용하도록 연결했습니다. Supabase URL·공개 키·서버 비밀 키와 `APP_BASE_URL`은 Cloudflare secret binding으로 설정했습니다. `/`·`/login`은 HTTP 200, 비로그인 `/api/me`는 예상된 `401 UNAUTHENTICATED`를 반환합니다. Supabase가 Worker callback 주소를 허용하는 것도 사전 확인했지만, Worker에서 실제 Google 로그인을 끝내지는 않았습니다. `.github/workflows/deploy-worker.yml`은 `main` push 또는 수동 실행으로 배포하며, GitHub 저장소에 `CLOUDFLARE_API_TOKEN` secret을 추가하기 전까지는 안전하게 배포를 건너뜁니다.
 
 2026년 10월 10일 현재 lint·typecheck·단위 테스트 15개·원격 통합 테스트 6개·모바일 Chromium E2E 8개와 운영 빌드가 통과했습니다. 당시 통합/E2E는 합성 계정과 파일을 만들고 정리했습니다. 실제 모바일 기기·오프라인 시험과 48시간 경과 후 재접속은 남아 있습니다. 2026-10-10 Storage 전송 변경 후 Supabase 원격 로그 10분 집계에서 합성 파일명·메모 문구·`token=`은 없었습니다. 관리 로그에는 계정·IP·요청 경로 같은 메타데이터가 남으므로 운영 로그 접근·보존 검토가 필요합니다. 원격 migration `20261010053800`, `20261010053830`, `20261010055100`과 예약 업로드 정책의 `private` 함수 배치를 확인했습니다. Google OAuth 개발 로그인을 확인했고, 콜백이 시작한 loopback 주소를 유지하도록 수정했습니다. 같은 Supabase 프로젝트의 10분 Cron은 HTTP 200을 반환하며 현재 운영 DB에도 적용됩니다. 합성 업로드와 계정 삭제 대상으로 유지관리 worker의 실제 Storage·DB·Auth 정리까지 검증했습니다. 운영 모드에서는 이 DB를 통합/E2E fixture로 쓰지 못하도록 차단합니다.
 
@@ -20,7 +20,7 @@
 
 Sharp 0.35.5·Vitest 4.1.11을 고정했습니다. `npm audit --omit=dev`는 0건입니다. 전체 개발·빌드 도구 감사에는 12건(중간 4, 높음 8)의 전이 취약점이 남으며, npm이 제안하는 강제 수정은 vinext를 호환성 없는 0.2.1로 내립니다. [braces 보안 공지](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)를 참고합니다.
 
-웹 런타임은 Cloudflare Workers + vinext입니다. Sharp는 테스트 fixture 생성에만 남고 Worker 이미지 검증·WebP 썸네일은 Cloudflare Images binding을 사용합니다. 변환은 매월 5,000개의 고유 변환까지 무료이며 초과하면 새 변환이 실패합니다 ([가격](https://developers.cloudflare.com/images/pricing/)). 로컬 binding은 과금되지 않습니다 ([로컬 개발](https://developers.cloudflare.com/images/optimization/binding/)). 사진은 변환을 위해 Cloudflare에서 처리됩니다. `vinext check`·typecheck·Worker build는 통과했고 build artifact에 Supabase 서버 키가 포함되지 않는 것을 확인했습니다. Worker에는 `ASSETS`·`IMAGES`와 Supabase URL·공개 키·서버 비밀 키·`APP_BASE_URL` secret binding이 있습니다. Cloudflare Workers Builds trigger는 아직 없어 Git push만으로 자동 배포되지 않습니다.
+웹 런타임은 Cloudflare Workers + vinext입니다. Sharp는 테스트 fixture 생성에만 남고 Worker 이미지 검증·WebP 썸네일은 Cloudflare Images binding을 사용합니다. 변환은 매월 5,000개의 고유 변환까지 무료이며 초과하면 새 변환이 실패합니다 ([가격](https://developers.cloudflare.com/images/pricing/)). 로컬 binding은 과금되지 않습니다 ([로컬 개발](https://developers.cloudflare.com/images/optimization/binding/)). 사진은 변환을 위해 Cloudflare에서 처리됩니다. `vinext check`·typecheck·Worker build는 통과했고 build artifact에 Supabase 서버 키가 포함되지 않는 것을 확인했습니다. Worker에는 `ASSETS`·`IMAGES`와 Supabase URL·공개 키·서버 비밀 키·`APP_BASE_URL` secret binding이 있습니다. GitHub Actions 배포 자동화는 `CLOUDFLARE_API_TOKEN` secret 설정 후 활성화됩니다.
 
 ## 설치와 실행
 
