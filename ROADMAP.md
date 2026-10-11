@@ -149,7 +149,7 @@
 ### 작업
 
 - [x] Cloudflare Workers + vinext를 배포 대상으로 선택하고 설정한다. 기본 dev/build/typecheck 스크립트, Workers Images binding, Node.js compatibility와 Worker types를 연결하고 2026-10-11 `recall-memory`를 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했다.
-- [ ] Cloudflare Workers Builds에서 GitHub `main` 자동 배포 trigger를 만든다. 저장소 연결은 등록했지만 Builds API용 사용자 token과 배포 build token이 없어 trigger는 아직 구성하지 않았다.
+- [ ] GitHub Actions에서 `main` push 자동 배포를 활성화한다. `.github/workflows/deploy-worker.yml`을 추가했고 push 실행을 확인했지만 `CLOUDFLARE_API_TOKEN` secret이 없어 checkout·build·deploy는 모두 건너뛰었다. 대상 계정 범위의 API token을 GitHub Actions secret에 등록한 뒤 실제 배포를 확인해야 한다.
 - [x] 선택한 호스팅에 서버 런타임·환경변수·Auth 콜백을 구성한다. Supabase URL·공개 키·서버 키·앱 주소를 Worker secret으로 설정하고 `/`·`/login` 200, 비로그인 `/api/me` 401을 확인했다. Supabase authorize 요청은 Worker callback redirect를 허용했다.
 - [x] 운영 DB migration과 비공개 버킷 정책을 확인한다. 사용자가 기존 개발 프로젝트를 운영에도 사용하기로 했으며 migration 이력과 비공개 버킷 정책은 해당 프로젝트에 적용되어 있다.
 - [ ] 실제 운영 URL에서 Google OAuth 로그인과 모바일 흐름을 확인한다.
@@ -340,3 +340,10 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 확인: Worker `/`·`/login`은 HTTP 200, 로그인 쿠키 없는 `/api/me`는 예상된 `401 UNAUTHENTICATED`를 반환한다. Supabase authorize 단계에서 Worker callback 주소 허용을 확인했으며 실제 Worker Google 로그인은 남아 있다.
 - 보호: `SUPABASE_ENVIRONMENT=production`이면 통합/E2E 합성 fixture 생성을 거부한다. 운영 데이터를 보존하기 위해 이후 연결 검증은 별도 Supabase 프로젝트에서 수행한다.
 - 제한: GitHub 저장소 연결은 되었지만 Workers Builds 자동 배포 trigger, 실제 OAuth·모바일 흐름, 보존·반출·삭제의 live 계정 확인, 별도 DB·사진 파일 백업과 복구 연습은 남아 있다. 같은 DB를 개발·운영이 공유하므로 격리와 Free 요금제 백업 한계를 감수한다.
+
+## 29. GitHub Actions 배포와 백업 선행 조건 — 2026년 10월 11일
+
+- 변경: `main` push와 수동 실행에서 `npm run deploy`를 실행하는 `.github/workflows/deploy-worker.yml`을 추가했다. Node.js 22.18을 사용하며 배포 token이 없으면 배포 단계를 건너뛴다.
+- 확인: GitHub가 workflow를 인식했고 첫 push 실행은 성공으로 끝났다. 다만 `CLOUDFLARE_API_TOKEN`이 설정되지 않아 checkout·의존성 설치·실제 Worker 배포 단계는 실행되지 않았다.
+- 다음 조건: Cloudflare API token을 대상 계정 범위로 만들고 GitHub Actions secret `CLOUDFLARE_API_TOKEN`에 저장한 뒤 workflow를 수동 실행해 배포를 확인한다.
+- 백업 상태: DB export·Storage 객체 백업·복구 연습은 아직 없다. 안전한 자동화 전에 `SUPABASE_DB_URL`과 비공개 오프사이트 저장소가 필요하다. DB dump는 Supabase managed logs나 Storage 파일을 보존하지 않으므로 각각 별도 범위로 다룬다.

@@ -2,7 +2,7 @@
 
 이 문서는 `PROJECT.md`의 MVP를 실제 웹앱으로 구현하기 위한 기본 설계다. 사진 파일과 메타데이터를 분리하고, 메모와 보관 상태는 하나의 DB 행에 묶어 저장한다. 실험 기간과 사진 보존 수명을 분리하는 것이 핵심이다.
 
-웹 런타임은 Cloudflare Workers + vinext로 정했다. `recall-memory` Worker는 2026년 10월 11일 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했고 Supabase 런타임 secret을 연결했다. `/`·`/login`은 200, 비로그인 `/api/me`는 `401 UNAUTHENTICATED`다. 운영 DB는 개발과 공유하는 기존 Supabase 프로젝트다. Google OAuth 실제 Worker 로그인과 자동 빌드 trigger는 미확인·미설정이며 상태는 `README.md`와 `ROADMAP.md`를 참고한다.
+웹 런타임은 Cloudflare Workers + vinext로 정했다. `recall-memory` Worker는 2026년 10월 11일 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했고 Supabase 런타임 secret을 연결했다. `/`·`/login`은 200, 비로그인 `/api/me`는 `401 UNAUTHENTICATED`다. 운영 DB는 개발과 공유하는 기존 Supabase 프로젝트다. GitHub Actions 배포 workflow는 추가했지만 `CLOUDFLARE_API_TOKEN` secret이 없어 실제 배포 단계는 아직 실행되지 않았다. Google OAuth 실제 Worker 로그인도 미검증이며 상세 상태는 `README.md`와 `ROADMAP.md`를 참고한다.
 
 ## 1. 구성과 책임
 
@@ -440,7 +440,7 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 
 ## 14. 운영 실험 전 남은 설정
 
-Worker는 공개 소개 화면까지 배포했다. 운영 Supabase 프로젝트, Google OAuth 클라이언트·redirect, 런타임 secrets, Workers Builds 자동 배포 trigger, 운영 종료 고지·반출 유예 기간은 아직 구성하지 않았다. 개발 Supabase는 합성 데이터 검증 전용이므로 실제 사용자 사진을 받기 전 운영 환경을 분리하고 보존·권한·반출 검증을 완료한다.
+Worker는 `recall-memory`로 배포했고 Supabase 런타임 secrets와 callback 허용 주소를 설정했다. 사용자의 결정에 따라 기존 Supabase 프로젝트를 개발과 MVP 운영에 함께 사용한다. 실제 Worker Google OAuth 로그인은 미검증이다. GitHub Actions 배포 workflow는 추가했으나 `CLOUDFLARE_API_TOKEN` secret이 없어 실제 배포는 아직 확인하지 않았다. Supabase 조직은 Free 요금제이며 DB export·Storage 객체 백업과 복구 연습이 없다. 운영 managed logs의 접근·보존 범위도 확인해야 한다. 운영 종료 고지·반출 유예 기간은 팀 협의 전까지 미확정으로 둔다. 공유 DB의 합성 fixture 차단은 설정했으며 실제 참여자 데이터를 받기 전에 백업·복구 및 운영 흐름을 확인한다.
 
 ## 15. 초기 구현 상태
 
