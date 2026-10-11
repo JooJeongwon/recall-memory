@@ -148,7 +148,8 @@
 
 ### 작업
 
-- [x] Cloudflare Workers + vinext를 로컬 배포 대상으로 선택하고 설정한다. 기본 dev/build/typecheck 스크립트, Workers Images binding, Node.js compatibility와 Worker types를 연결했다. 실제 배포·OAuth·이미지 binding 운영 검증은 P5에 남는다.
+- [x] Cloudflare Workers + vinext를 배포 대상으로 선택하고 설정한다. 기본 dev/build/typecheck 스크립트, Workers Images binding, Node.js compatibility와 Worker types를 연결하고 2026-10-11 `recall-memory`를 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했다.
+- [ ] Cloudflare Workers Builds에서 GitHub `main` 자동 배포 trigger를 만든다. 저장소 연결은 등록했지만 Builds API용 사용자 token과 배포 build token이 없어 trigger는 아직 구성하지 않았다.
 - [ ] 선택한 호스팅에 서버 런타임·환경변수·Auth 콜백을 구성한다.
 - [ ] 운영 DB migration과 비공개 버킷 정책을 확인한다.
 - [ ] 실제 운영 URL에서 Google OAuth 로그인과 모바일 흐름을 확인한다.
@@ -325,3 +326,9 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 변경: Sharp는 Worker 런타임에서 제거하고 테스트 fixture용 dev dependency로 옮겼다. Images binding으로 이미지 정보·정적 형식·40MP 상한을 확인하고 WebP thumbnail을 만든다. binding 오류는 업로드 원본을 정리하지 않도록 재시도 가능한 503으로 처리한다.
 - 검증: `vinext check` 100%, lint, `npm run typecheck`, `npm run build`, `git diff --check`, `npm audit --omit=dev`(0건). Worker artifact에서 Supabase server secret이 포함되지 않는 것도 확인했다.
 - 제한: unit/integration/E2E는 다시 실행하지 않았다. 개발 Supabase를 사용하는 Worker는 배포하지 않았다. 운영 Supabase·Google OAuth·Secrets 설정이 P5에 남아 있다. 전체 dev/build 도구 감사는 취약점 12건(중간 4, 높음 8)을 보고한다.
+
+## 27. Workers 배포와 저장소 연결 — 2026년 10월 11일
+
+- 통과: `recall-memory` Worker를 `https://recall-memory.jwjoo0512.workers.dev`에 배포하고 소개 화면 HTTP 200을 확인했다. Worker에는 `ASSETS`·`IMAGES` binding이 있다.
+- 변경: Cloudflare 계정에 `JooJeongwon/recall-memory` GitHub 저장소 연결을 등록했다.
+- 제한: Worker의 Supabase 런타임 변수와 Google OAuth는 설정하지 않았다. Cloudflare API 연결은 사용자 API token 관리 권한이 없고 `cf` CLI도 인증되지 않아, Builds API용 사용자 token과 배포 build token을 준비하지 못했다. 기존 다른 Worker의 build token은 재사용하지 않았다. 현재 연결된 Supabase 프로젝트는 합성 데이터 검증용 개발 프로젝트뿐이므로 공개 Worker에 연결하지 않았다.

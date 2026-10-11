@@ -2,7 +2,7 @@
 
 이 문서는 `PROJECT.md`의 MVP를 실제 웹앱으로 구현하기 위한 기본 설계다. 사진 파일과 메타데이터를 분리하고, 메모와 보관 상태는 하나의 DB 행에 묶어 저장한다. 실험 기간과 사진 보존 수명을 분리하는 것이 핵심이다.
 
-웹 런타임은 Cloudflare Workers + vinext로 정했다. 현재 저장소에 로컬 설정이 있으며 배포된 상태는 아니다. 2026년 10월 8일 초기 화면·API·DB 함수·유지관리 소스를 작성했으며, 실행 환경과 실제 연결 검증 상태는 문서 마지막 절과 `README.md`를 참고한다.
+웹 런타임은 Cloudflare Workers + vinext로 정했다. `recall-memory` Worker는 2026년 10월 11일 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했으며, 현재는 소개 화면만 공개되어 있다. Supabase 런타임 설정·Google OAuth·자동 빌드 trigger 상태는 `README.md`와 `ROADMAP.md`를 참고한다.
 
 ## 1. 구성과 책임
 
@@ -438,9 +438,9 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 - [vinext Cloudflare 배포](https://vinext.dev/docs/deploying/cloudflare): Cloudflare Workers 배포 설정.
 - [MDN 파일 입력](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file): 사용자가 선택한 파일 접근과 형식 힌트.
 
-## 14. 배포 전 남은 선택
+## 14. 운영 실험 전 남은 설정
 
-Cloudflare Workers + vinext 로컬 설정은 있지만 Worker를 배포하지 않았다. 운영 Supabase 프로젝트, Google OAuth 클라이언트·redirect, 런타임 secrets, 운영 종료 고지·반출 유예 기간을 정한다. 실제 사용자 사진을 받기 전에는 보존·권한·반출 검증을 완료한다.
+Worker는 공개 소개 화면까지 배포했다. 운영 Supabase 프로젝트, Google OAuth 클라이언트·redirect, 런타임 secrets, Workers Builds 자동 배포 trigger, 운영 종료 고지·반출 유예 기간은 아직 구성하지 않았다. 개발 Supabase는 합성 데이터 검증 전용이므로 실제 사용자 사진을 받기 전 운영 환경을 분리하고 보존·권한·반출 검증을 완료한다.
 
 ## 15. 초기 구현 상태
 

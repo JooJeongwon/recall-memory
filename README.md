@@ -4,6 +4,8 @@
 
 ## 현재 상태
 
+2026년 10월 11일 Cloudflare Worker `recall-memory`를 [https://recall-memory.jwjoo0512.workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했고 소개 화면의 HTTP 200을 확인했습니다. 현재 Worker에는 Supabase 런타임 환경변수가 없어 로그인·사진 기능은 연결되지 않았습니다. GitHub 저장소 연결은 등록했지만 Workers Builds trigger는 아직 없어 `main` push가 자동 배포를 시작하지 않습니다. Cloudflare Builds 설정용 사용자 API token과 배포 build token이 준비되기 전까지 공개 URL은 소개 화면으로만 사용합니다.
+
 2026년 10월 10일 현재 lint·typecheck·단위 테스트 15개·원격 통합 테스트 6개·모바일 Chromium E2E 8개와 운영 빌드가 통과했습니다. 통합/E2E 검증은 합성 계정과 파일을 사용하고 테스트 뒤 정리합니다. 실제 모바일 기기·오프라인 시험과 48시간 경과 후 재접속은 남아 있습니다. 2026-10-10 Storage 전송 변경 후 Supabase 원격 로그 10분 집계에서 합성 파일명·메모 문구·`token=`은 없었습니다. 관리 로그에는 계정·IP·요청 경로 같은 메타데이터가 남으므로 운영 로그 접근·보존 검토가 필요합니다. 원격 migration `20261010053800`, `20261010053830`, `20261010055100`과 예약 업로드 정책의 `private` 함수 배치를 확인했습니다. Google OAuth 개발 로그인을 확인했고, 콜백이 시작한 loopback 주소를 유지하도록 수정했습니다. 개발 프로젝트의 10분 Cron은 HTTP 200을 반환합니다. 합성 업로드와 계정 삭제 대상으로 유지관리 worker의 실제 Storage·DB·Auth 정리까지 검증했습니다.
 
 2026-10-10 리팩토링으로 업로드 확정 API는 `{ photo }`만 반환합니다. 사용하지 않는 계정 조회를 제거해 사진 확정 후 부가 조회 실패로 업로드 실패가 표시되지 않도록 했습니다. 업로드 확정·계정 삭제의 내부 RPC는 같은 요청에서 검증한 인증 결과를 재사용합니다. 실험 시각은 `GET /api/me`에서 조회하며, 요청 간 인증 공유나 DB 권한 검사의 생략은 없습니다.
@@ -18,7 +20,7 @@
 
 Sharp 0.35.5·Vitest 4.1.11을 고정했습니다. `npm audit --omit=dev`는 0건입니다. 전체 개발·빌드 도구 감사에는 12건(중간 4, 높음 8)의 전이 취약점이 남으며, npm이 제안하는 강제 수정은 vinext를 호환성 없는 0.2.1로 내립니다. [braces 보안 공지](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)를 참고합니다.
 
-웹 런타임은 Cloudflare Workers + vinext로 설정했습니다. Sharp는 테스트 fixture 생성에만 남고 Worker 이미지 검증·WebP 썸네일은 Cloudflare Images binding을 사용합니다. 변환은 매월 5,000개의 고유 변환까지 무료이며 초과하면 새 변환이 실패합니다 ([가격](https://developers.cloudflare.com/images/pricing/)). 로컬 binding은 과금되지 않습니다 ([로컬 개발](https://developers.cloudflare.com/images/optimization/binding/)). 사진은 변환을 위해 Cloudflare에서 처리됩니다. `vinext check`·typecheck·Worker build는 통과했고 build artifact에 Supabase 서버 키가 포함되지 않는 것을 확인했습니다. 현재 Worker는 배포되지 않았고 개발용 Supabase 프로젝트만 연결되어 있습니다.
+웹 런타임은 Cloudflare Workers + vinext로 설정했습니다. Sharp는 테스트 fixture 생성에만 남고 Worker 이미지 검증·WebP 썸네일은 Cloudflare Images binding을 사용합니다. 변환은 매월 5,000개의 고유 변환까지 무료이며 초과하면 새 변환이 실패합니다 ([가격](https://developers.cloudflare.com/images/pricing/)). 로컬 binding은 과금되지 않습니다 ([로컬 개발](https://developers.cloudflare.com/images/optimization/binding/)). 사진은 변환을 위해 Cloudflare에서 처리됩니다. `vinext check`·typecheck·Worker build는 통과했고 build artifact에 Supabase 서버 키가 포함되지 않는 것을 확인했습니다. 배포된 Worker에는 `ASSETS`·`IMAGES` binding만 있고 Supabase 런타임 변수와 Workers Builds trigger는 아직 없습니다. 개발용 Supabase 키는 공개 Worker에 연결하지 않았습니다.
 
 ## 설치와 실행
 
