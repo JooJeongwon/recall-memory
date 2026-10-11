@@ -119,8 +119,8 @@
 - [x] 24시간 지난 미완료 업로드만 자동 정리한다. 합성 `uploading` 사진의 만료 시각을 당겨 실제 유지관리 함수를 실행했고 원본·썸네일 Storage 제거와 작업 완료를 확인했다. 정상 `ready` 사진은 유지했다. 계정 삭제 요청의 합성 사용자도 파일·프로필·메모·Auth 계정 제거까지 확인했다. 실제 24시간 대기 후 실행하는 벽시계 검증은 남아 있다.
 - [x] 작업별 진행 토큰을 사용해 로그아웃 이후 계정 삭제 상태 확인을 구현한다. global sign-out 후 sessionStorage의 토큰으로 상태 API를 조회하고 대기 UI를 표시하는 E2E를 확인했다. 실제 삭제 작업 완료는 별도 검증한다.
 - [x] 앱 소스·동의된 분석 이벤트·최근 합성 검증의 로그 노출을 확인한다. 직접 logger·console 기록과 외부 분석 SDK가 없고, 행동 이벤트는 이벤트 이름·사진 ID·방문 맥락만 보낸다. 2026-10-10 post-change 원격 로그 10분 집계에서 테스트 파일명·메모 문구·`token=`은 없었다.
-- [ ] 운영 로그의 접근·보존 범위와 요청 경로·계정·IP 메타데이터 처리 방침을 확인한다. Supabase managed logs에 계정·IP·요청 경로 메타데이터가 남고, [공식 문서](https://supabase.com/docs/guides/troubleshooting/check-usage-for-monthly-active-users-mau-MwZaBs)는 Free 요금제 로그 접근 기간을 1일로 안내한다. 프로젝트 접근 역할과 실제 설정, 호스팅 로그는 아직 확인하지 않았다.
-- [ ] DB와 파일의 복구 범위, 운영 종료 시 반출 안내 계획을 확인한다. Supabase 조직이 Free 요금제인 것을 확인했다. [공식 백업 문서](https://supabase.com/docs/guides/platform/backups)는 자동 일일 백업을 유료 요금제로 설명하고, Free에는 정기 오프사이트 DB export를 권하며 Storage API 객체는 DB 백업에서 제외한다고 안내한다. DB·Storage 백업 및 복구 연습은 아직 없다.
+- [ ] 운영 로그의 접근·보존 범위와 요청 경로·계정·IP 메타데이터 처리 방침을 확인한다. Supabase managed logs에 계정·IP·요청 경로 메타데이터가 남고, [공식 문서](https://supabase.com/docs/guides/troubleshooting/check-usage-for-monthly-active-users-mau-MwZaBs)는 Free 요금제 로그 접근 기간을 1일로 안내한다. 2026-10-11 최근 24시간 unified logs를 source·건수·시각만 집계해 Auth, Edge/Function, Postgres/PgBouncer, Storage 등 로그 스트림을 확인했다. 원문은 조회하지 않았다. 연결된 도구는 조직 구성원별 역할 목록을 제공하지 않아 Supabase 권한과 Cloudflare 호스팅 로그 설정은 미확인이다.
+- [ ] DB와 파일의 복구 범위, 운영 종료 시 반출 안내 계획을 확인한다. Supabase 조직은 Free 요금제다. [공식 백업 문서](https://supabase.com/docs/guides/platform/backups)는 자동 일일 백업을 유료 요금제로 설명하고, Free에는 정기 오프사이트 DB export를 권하며 Storage API 객체는 DB 백업에서 제외한다고 안내한다. DB 접속 문자열과 비공개 외부 저장소가 없어 DB·Storage 백업 및 복구 연습은 아직 없다.
 - [ ] 모바일 브라우저·느린 연결·통신 단절 상태를 점검한다. 모바일 Chromium E2E에서 목록 API와 ZIP 원본 스트림의 연결 단절 안내·재시도를 확인했다. 실제 기기의 오프라인·느린 연결 검증은 아직 하지 않았다.
 
 ### 필수 검증 표
@@ -347,3 +347,4 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 확인: GitHub가 workflow를 인식했고 첫 push 실행은 성공으로 끝났다. 다만 `CLOUDFLARE_API_TOKEN`이 설정되지 않아 checkout·의존성 설치·실제 Worker 배포 단계는 실행되지 않았다.
 - 다음 조건: Cloudflare API token을 대상 계정 범위로 만들고 GitHub Actions secret `CLOUDFLARE_API_TOKEN`에 저장한 뒤 workflow를 수동 실행해 배포를 확인한다.
 - 백업 상태: DB export·Storage 객체 백업·복구 연습은 아직 없다. 안전한 자동화 전에 `SUPABASE_DB_URL`과 비공개 오프사이트 저장소가 필요하다. DB dump는 Supabase managed logs나 Storage 파일을 보존하지 않으므로 각각 별도 범위로 다룬다.
+- 로그 확인: Supabase 조직 요금제가 Free인 것을 확인했고 unified logs 최근 24시간을 source·건수·시각만 집계했다. 원문·사용자 데이터는 조회하지 않았다. 구성원별 권한 목록과 Cloudflare 로그 설정을 확인할 연결 도구는 없어 해당 검토는 계속 미완료다.
