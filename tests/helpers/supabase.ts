@@ -6,12 +6,14 @@ import { photoSchema } from "../../src/lib/validation/contracts";
 import type { Database } from "../../src/types/database";
 
 export function createTestData() {
+  if (process.env.SUPABASE_ENVIRONMENT === "production")
+    throw new Error("통합/E2E 검증은 운영 Supabase 프로젝트에서 실행할 수 없습니다.");
   const url = process.env.INTEGRATION_SUPABASE_URL;
   const key = process.env.INTEGRATION_SUPABASE_PUBLISHABLE_KEY;
   const secret = process.env.INTEGRATION_SUPABASE_SECRET_KEY;
   const projectId = process.env.INTEGRATION_SUPABASE_PROJECT_ID;
   if (!url || !key || !secret || !projectId || new URL(url).origin !== `https://${projectId}.supabase.co`)
-    throw new Error("통합 검증에는 URL과 ID가 일치하는 전용 개발 Supabase 프로젝트를 명시해야 합니다.");
+    throw new Error("통합 검증에는 URL과 ID가 일치하는 전용 Supabase 프로젝트를 명시해야 합니다.");
   const admin = createClient<Database>(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   const userIds: string[] = [];
   const jobIds: string[] = [];

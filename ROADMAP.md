@@ -46,7 +46,7 @@
 - [x] Next.js·TypeScript 프로젝트를 만들고 공식 문서 기준으로 버전을 고정한다. lockfile 생성과 `npm ci`를 확인했다.
 - [x] lint·typecheck·test·integration·e2e·build 스크립트를 정의한다. lint·typecheck·단위 테스트 15개·원격 integration 6개·E2E 8개(소개, 목록 응답 순서, 업로드·보관/ZIP, 메모 복구, 만료 후 반출, 분석 동의, 삭제)·build 통과.
 - [x] `.env.example`과 개발 실행 설명을 작성한다.
-- [x] 개발용 Supabase 환경을 만들고 운영 환경과 분리한다. 서울 지역의 `recall-memory` (`mgedpimvznbatmipaacn`)는 합성 데이터 검증 전용 개발 프로젝트다.
+- [x] 서울 지역에 개발 Supabase 환경 `recall-memory` (`mgedpimvznbatmipaacn`)를 만들었다. 후속 사용자 결정에 따라 현재 MVP 운영도 이 프로젝트를 공유한다.
 - [x] Google OAuth Web client와 Supabase Google provider·Site URL·localhost callback을 설정하고 실제 로그인을 확인했다. 첫 시도는 `127.0.0.1`에서 시작해 콜백이 `APP_BASE_URL`의 `localhost`로 이동하면서 세션 쿠키가 끊겼다. 콜백은 허용된 개발 loopback host로 되돌아가고 API Origin 검사도 개발 환경에서 loopback 주소를 허용하도록 수정했다.
 - [x] `profiles`, `trials`, `photos`, `events`, `cleanup_jobs` migration을 작성한다. 빈 로컬 DB와 새 원격 개발 DB에 적용했다. migration 파일 버전은 원격 적용 이력 `20261008045831`과 맞췄다.
 - [x] FK·UNIQUE·CHECK·인덱스와 DB 타입 생성을 반영한다. 원격 프로젝트의 실제 스키마에서 타입을 다시 생성해 클라이언트에 연결했다.
@@ -150,12 +150,12 @@
 
 - [x] Cloudflare Workers + vinext를 배포 대상으로 선택하고 설정한다. 기본 dev/build/typecheck 스크립트, Workers Images binding, Node.js compatibility와 Worker types를 연결하고 2026-10-11 `recall-memory`를 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했다.
 - [ ] Cloudflare Workers Builds에서 GitHub `main` 자동 배포 trigger를 만든다. 저장소 연결은 등록했지만 Builds API용 사용자 token과 배포 build token이 없어 trigger는 아직 구성하지 않았다.
-- [ ] 선택한 호스팅에 서버 런타임·환경변수·Auth 콜백을 구성한다.
-- [ ] 운영 DB migration과 비공개 버킷 정책을 확인한다.
+- [x] 선택한 호스팅에 서버 런타임·환경변수·Auth 콜백을 구성한다. Supabase URL·공개 키·서버 키·앱 주소를 Worker secret으로 설정하고 `/`·`/login` 200, 비로그인 `/api/me` 401을 확인했다. Supabase authorize 요청은 Worker callback redirect를 허용했다.
+- [x] 운영 DB migration과 비공개 버킷 정책을 확인한다. 사용자가 기존 개발 프로젝트를 운영에도 사용하기로 했으며 migration 이력과 비공개 버킷 정책은 해당 프로젝트에 적용되어 있다.
 - [ ] 실제 운영 URL에서 Google OAuth 로그인과 모바일 흐름을 확인한다.
 - [ ] 테스트 계정으로 보존·반출·삭제를 검증한 뒤 데이터 정리한다.
 - [ ] 안내 문구와 분석 동의가 실제 정책과 일치하는지 확인한다.
-- [x] 실패 업로드·삭제 실패·저장량을 확인할 운영 수단을 준비한다. [supabase/operations.sql](supabase/operations.sql)의 읽기 전용 집계 4개를 원격 개발 프로젝트에서 실행해 Cron·삭제 작업·사진 수명주기·Storage 객체 수/용량 결과를 확인했다. 수동 점검이며 alert는 구성하지 않았다.
+- [x] 실패 업로드·삭제 실패·저장량을 확인할 운영 수단을 준비한다. [supabase/operations.sql](supabase/operations.sql)의 읽기 전용 집계 4개를 원격 프로젝트에서 실행해 Cron·삭제 작업·사진 수명주기·Storage 객체 수/용량 결과를 확인했다. 수동 점검이며 alert는 구성하지 않았다.
 - [ ] 사전 인터뷰 후 실제 불편을 겪는 참여자 8~12명을 모집한다.
 - [ ] 사용 실험을 실행하고 연구자 요청 방문을 별도로 기록한다.
 - [ ] 시작 후 72시간까지 자발적 재방문을 관찰한다.
@@ -225,8 +225,8 @@
 - 실제 브라우저 통합 통과: 격리된 합성 계정으로 예약 경로 인증 업로드, 사진 다시 보기, 메모 저장/수정/비우기, 보관함, ZIP 다운로드를 실행했다. ZIP 원본 바이트와 UTF-8 메모를 비교했고 테스트 계정·파일은 제거했다.
 - 만료 경계 통과: 통합 테스트에서 시험용 `started_at`·`ends_at` fixture로 실제 48시간을 기다리지 않고 만료를 재현했다. 신규 예약, 만료 전에 예약한 사진의 만료 후 확정, 만료 후 claim은 거절되고 미완료 사진은 정리 대기 상태가 됐다. 기존 ready 사진의 메모 수정과 세션 기반 원본 다운로드는 계속 가능했고, 모바일 E2E에서도 만료 후 보관함과 ZIP 원본·메타데이터를 확인했다. 실제 48시간 경과·로그아웃 후 재로그인은 별도 검증 대상이다.
 - 보안 advisor: WARN·ERROR 0건. 일반 사용자가 조회할 수 없는 `events`·`cleanup_jobs`의 정책 없음 INFO 2건은 의도한 전체 차단 상태다. 성능 INFO는 신규 DB의 아직 사용하지 않은 인덱스 10건이며 사용 근거 없이 삭제하지 않았다.
-- Auth 설정 대기: Google OAuth UI는 구현했지만 개발 프로젝트 provider가 비활성(`external.google=false`)이며 실제 로그인은 미검증이다. Google Cloud에서 Web OAuth Client ID·Secret을 만들고 Supabase Auth Provider에 등록해야 한다. Google callback은 `https://mgedpimvznbatmipaacn.supabase.co/auth/v1/callback`, 앱 redirect allowlist에는 localhost와 127.0.0.1의 `/auth/confirm`을 설정한다.
-- 다음 실행 순서: Google OAuth credentials/provider·redirect 설정과 실제 로그인 확인 → 로그아웃·재로그인 및 실제 48시간 보존 확인 → 유지관리 worker/Cron과 계정 삭제 실제 처리 검증. 사진 삭제 큐·Storage 제거·완료 RPC는 합성 통합 테스트에서 별도로 확인했다.
+- 당시 Auth 설정 대기(2026-10-08): Google OAuth UI는 구현했지만 개발 프로젝트 provider가 비활성(`external.google=false`)이며 실제 로그인을 확인하지 않았다. Google callback은 `https://mgedpimvznbatmipaacn.supabase.co/auth/v1/callback`, 앱 redirect allowlist에는 localhost와 127.0.0.1의 `/auth/confirm`을 설정해야 했다. 이후 개발 환경 Google 로그인을 완료했으며 현재 Worker callback도 allowlist에 추가했다.
+- 당시 다음 실행 순서(2026-10-08): Google OAuth credentials/provider·redirect 설정과 실제 로그인 확인 → 로그아웃·재로그인 및 실제 48시간 보존 확인 → 유지관리 worker/Cron과 계정 삭제 실제 처리 검증. 이후 개발 Google 로그인과 Cron, 합성 계정 삭제 처리는 확인했으며, 실제 Worker OAuth와 48시간 재접속은 여전히 남아 있다.
 
 ## 13. 업로드와 메모 경계 후속 검증 — 2026년 10월 8일
 
@@ -279,7 +279,7 @@
 ## 20. Cron 실행 준비 — 2026년 10월 10일
 
 - 통과: 개발 프로젝트에서 `pg_cron`과 `pg_net`을 활성화하고, 설치된 확장을 읽기 전용 SQL로 확인했다.
-- 제한: 관리 토큰이 연결된 CLI와 Edge Function secret 설정 도구가 없어 `MAINTENANCE_CALL_SECRET`을 원격 함수 환경과 Vault에 등록하지 않았다. 그래서 Cron은 의도적으로 등록하지 않았으며 자동 삭제와 계정 전체 DB/Auth 삭제는 계속 비활성 상태다.
+- 당시 제한(2026-10-10 이전): 관리 토큰이 연결된 CLI와 Edge Function secret 설정 도구가 없어 `MAINTENANCE_CALL_SECRET`을 원격 함수 환경과 Vault에 등록하지 않았다. 그래서 Cron은 의도적으로 등록하지 않았으며 자동 삭제와 계정 전체 DB/Auth 삭제는 비활성 상태였다. 이후 2026-10-10에 secret과 Cron을 설정했다.
 
 ## 21. 인증된 Storage 전송과 로그 노출 검증 — 2026년 10월 10일
 
@@ -318,7 +318,7 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 변경: `pg_net`을 `extensions` schema에 재설치해 보안 advisor 경고를 해소했다. 큐가 비었고 Database Webhook이 없는 것을 확인한 뒤 변경했으며, Cron을 재활성화하고 10분 schedule 및 HTTP 200 응답을 재확인했다.
 - 통과: `supabase/operations.sql`의 네 읽기 전용 집계 쿼리를 원격 개발 DB에서 실행했다. 결과에는 사용자 ID와 파일명이 포함되지 않는다.
 - 검증: lint, typecheck, 단위 테스트 15개, 원격 통합 테스트 6개, 모바일 Chromium E2E 8개, 운영 build, `git diff --check` 통과. `npm audit --omit=dev`는 0건이다. 전체 `npm audit`의 high 5건은 lint 개발 도구의 `braces` 간접 의존성이고, 자동 수정은 현재 `eslint-config-next`를 하위 호환되지 않는 v14로 낮추므로 적용하지 않았다.
-- 제한: 24시간의 실제 경과, 실패 Storage 제거 후 실제 worker 재시도, 48시간 보존 재접속과 실기기 네트워크는 미검증이다. 운영 호스트와 운영 Supabase 프로젝트가 정해지지 않아 P5의 production migration·OAuth·모바일 흐름도 수행하지 않았다.
+- 제한(2026-10-10 당시): 24시간의 실제 경과, 실패 Storage 제거 후 실제 worker 재시도, 48시간 보존 재접속과 실기기 네트워크는 미검증이다. 운영 호스트와 운영 Supabase 프로젝트가 정해지지 않아 P5의 production migration·OAuth·모바일 흐름도 수행하지 않았다. 이후 Worker와 기존 Supabase 프로젝트를 MVP 운영에 연결했다.
 
 ## 26. Workers + vinext 로컬 이관 — 2026년 10월 11일
 
@@ -331,4 +331,12 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 
 - 통과: `recall-memory` Worker를 `https://recall-memory.jwjoo0512.workers.dev`에 배포하고 소개 화면 HTTP 200을 확인했다. Worker에는 `ASSETS`·`IMAGES` binding이 있다.
 - 변경: Cloudflare 계정에 `JooJeongwon/recall-memory` GitHub 저장소 연결을 등록했다.
-- 제한: Worker의 Supabase 런타임 변수와 Google OAuth는 설정하지 않았다. Cloudflare API 연결은 사용자 API token 관리 권한이 없고 `cf` CLI도 인증되지 않아, Builds API용 사용자 token과 배포 build token을 준비하지 못했다. 기존 다른 Worker의 build token은 재사용하지 않았다. 현재 연결된 Supabase 프로젝트는 합성 데이터 검증용 개발 프로젝트뿐이므로 공개 Worker에 연결하지 않았다.
+- 제한: 당시 Worker의 Supabase 런타임 변수는 설정하지 않았다. Cloudflare Builds API용 사용자 token과 배포 build token이 없어 자동 배포 trigger는 만들지 못했다. 기존 다른 Worker의 build token은 재사용하지 않았다.
+
+## 28. 동일 Supabase 프로젝트의 MVP 운영 연결 — 2026년 10월 11일
+
+- 결정: 사용자의 지시에 따라 기존 개발 Supabase 프로젝트를 MVP 운영 데이터에도 사용한다. 별도 프로젝트를 만들거나 기존 데이터를 변경하지 않았다.
+- 설정: Worker에 Supabase URL·공개 키·서버 비밀 키·`APP_BASE_URL` secret binding을 설정했다. 값은 저장소나 응답에 출력하지 않았다.
+- 확인: Worker `/`·`/login`은 HTTP 200, 로그인 쿠키 없는 `/api/me`는 예상된 `401 UNAUTHENTICATED`를 반환한다. Supabase authorize 단계에서 Worker callback 주소 허용을 확인했으며 실제 Worker Google 로그인은 남아 있다.
+- 보호: `SUPABASE_ENVIRONMENT=production`이면 통합/E2E 합성 fixture 생성을 거부한다. 운영 데이터를 보존하기 위해 이후 연결 검증은 별도 Supabase 프로젝트에서 수행한다.
+- 제한: GitHub 저장소 연결은 되었지만 Workers Builds 자동 배포 trigger, 실제 OAuth·모바일 흐름, 보존·반출·삭제의 live 계정 확인, 별도 DB·사진 파일 백업과 복구 연습은 남아 있다. 같은 DB를 개발·운영이 공유하므로 격리와 Free 요금제 백업 한계를 감수한다.
