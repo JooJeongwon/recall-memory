@@ -15,6 +15,8 @@ export async function requireUser() {
   dbError(profileError);
   if (!profile) {
     const result = await adminClient().rpc("ensure_profile", { p_user_id: data.user.id });
+    // TEMP DIAG: remove after root cause confirmed
+    if (result.error) console.error("[diag:ensure_profile] code:", result.error.code, "msg:", result.error.message, "hint:", result.error.hint);
     dbError(result.error);
   } else if (profile.account_state !== "active") throw new ApiError(403, "ACCOUNT_DELETING");
   return { supabase, user: data.user };
