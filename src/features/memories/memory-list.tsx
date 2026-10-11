@@ -4,7 +4,7 @@ import { z } from "zod";
 import { motion } from "motion/react";
 import { requestApi } from "@/lib/api";
 import { photoSchema, type Photo } from "@/lib/validation/contracts";
-import { demoImage, demoPhoto, isDemoMode } from "@/lib/demo";
+import { demoImages, demoPhotos, isDemoMode } from "@/lib/demo";
 import { ViewerOverlay } from "./viewer-overlay";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -19,7 +19,7 @@ const tileVariants = {
 };
 
 export function MemoryList() {
-  const [photos, setPhotos] = useState<Photo[]>(isDemoMode() ? [demoPhoto] : []);
+  const [photos, setPhotos] = useState<Photo[]>(isDemoMode() ? demoPhotos : []);
   const [message, setMessage] = useState(isDemoMode() ? "" : "보관함을 불러오는 중…");
   const [retry, setRetry] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -122,7 +122,7 @@ export function MemoryList() {
 }
 
 function GalleryTile({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
-  const [url, setUrl] = useState(isDemoMode() ? demoImage : "");
+  const [url, setUrl] = useState(isDemoMode() ? (demoImages[photo.id] ?? demoImages[Object.keys(demoImages)[0]]) : "");
 
   useEffect(() => {
     if (isDemoMode()) return;

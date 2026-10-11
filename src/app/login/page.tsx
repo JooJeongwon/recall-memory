@@ -77,10 +77,10 @@ export default function Login() {
         <p className="login-tagline">A MUSEUM OF MY MOMENTS</p>
 
         <h1 className="login-heading">
-          이메일로<br />시작해요.
+          Google로<br />시작해요.
         </h1>
         <p className="login-sub">
-          계정이 없으면, 이메일로<br />인증 후 바로 이용할 수 있어요.
+          Google 계정으로<br />바로 이용할 수 있어요.
         </p>
 
         {isConfigured() ? <LoginForm /> : (
