@@ -1,10 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
 import { requestApi } from "@/lib/api";
+
 export function TrialNotice() {
   const [ended, setEnded] = useState(false);
   useEffect(() => {
-    requestApi<{ trial_state: string }>("/api/me").then((me) => setEnded(me.trial_state === "ended")).catch(() => {});
+    requestApi<{ trial_state: string }>("/api/me")
+      .then((me) => setEnded(me.trial_state === "ended"))
+      .catch(() => {});
   }, []);
-  return ended ? <aside className="notice">이번 다시 보기 기간이 끝났어요. 남긴 사진과 글은 보관함에서 계속 볼 수 있어요. 기존 사진에 메모를 남기거나 가져갈 수도 있어요.</aside> : null;
+
+  if (!ended) return null;
+
+  return (
+    <div className="trial-notice">
+      <div className="trial-dot" />
+      <div>
+        <strong>사진을 추가할 수 있는 기간이 종료되었어요.</strong>
+        <p>이미 남긴 기억은 계속 확인하고 다운로드할 수 있어요.</p>
+      </div>
+    </div>
+  );
 }

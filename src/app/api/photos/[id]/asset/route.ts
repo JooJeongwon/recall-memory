@@ -10,6 +10,3 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 const { url, expires_at } = await asset(id, kind); return json({ url, expires_at });
   })(request);
 }
-
-
-\n

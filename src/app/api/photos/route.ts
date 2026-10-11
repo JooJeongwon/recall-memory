@@ -5,6 +5,3 @@ export const runtime = "nodejs";
 export const GET = endpoint(async (request) => {
   return json(await listPhotos(new URL(request.url)));
 });
-
-
-\n

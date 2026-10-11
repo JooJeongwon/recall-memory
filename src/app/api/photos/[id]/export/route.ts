@@ -10,6 +10,3 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 return json({ url, expires_at, original_filename: `original.${formats[photo.mime_type]}`, memory: { schema_version: 1, photo_id: photo.id, original_name: photo.original_name, note_text: photo.note_text, uploaded_at: photo.ready_at, preserved_at: photo.preserved_at, exported_at: new Date().toISOString() } });
   })(request);
 }
-
-
-\n

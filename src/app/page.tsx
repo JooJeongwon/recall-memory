@@ -1,13 +1,81 @@
 import Link from "next/link";
+import Image from "next/image";
 import { isConfigured } from "@/lib/config";
-import { ConnectionNotice } from "@/components/connection-notice";
+import { isDemoMode } from "@/lib/demo";
+import { OpeningSplash } from "@/components/branding/OpeningSplash";
 
 export default function Home() {
-  return <><h1>사진 속 순간에<br />한 줄을 남겨보세요.</h1>
-    <p>다시 본 사진에서 기억하고 싶은 의미를 골라 남길 수 있어요.</p>
-    <p>첫 사진을 올린 뒤 48시간 동안 사진을 추가할 수 있어요. 기간이 끝나도 기존 사진과 글은 계속 보고 가져갈 수 있어요.</p>
-    <p>직접 선택한 사진만 복사해 받아요. 기기의 원본은 바뀌지 않아요.</p>
-    <p>JPEG·PNG·정적 WebP를 지원해요. 사진당 10 MiB, 계정당 20장까지 선택할 수 있어요.</p>
-    {!isConfigured() && <ConnectionNotice />}
-    <Link className="button" href="/login">시작하기</Link></>;
+  return (
+    <>
+    <OpeningSplash />
+    <div className="landing-root">
+      {/* Brand top bar */}
+      <div className="landing-topbar">
+        <Image
+          src="/branding/text-logo.png"
+          alt="기억할 권리"
+          width={2172}
+          height={724}
+          className="landing-brand-logo"
+          priority
+          unoptimized
+        />
+        <span className="landing-tagline">A MUSEUM<br />OF MY MOMENTS</span>
+      </div>
+
+      {/* Editorial photo collage */}
+      <div className="landing-collage" aria-hidden="true">
+        <div className="landing-collage-inner">
+          <div className="landing-photo landing-photo-1">
+            <Image src="/terace.png" alt="" fill sizes="54vw" style={{ objectFit: "cover" }} priority />
+          </div>
+          <div className="landing-photo landing-photo-2">
+            <Image src="/gold.png" alt="" fill sizes="40vw" style={{ objectFit: "cover" }} priority />
+          </div>
+          <div className="landing-photo landing-photo-3">
+            <Image src="/images/editorial/romantic.png" alt="" fill sizes="38vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Hero text + CTA */}
+      <div className="landing-content">
+        <h1 className="landing-heading">
+          지나간 순간을,<br />다시 마주하다.
+        </h1>
+        <p className="landing-body">
+          사진을 다시 보고,<br />오래 기억하고 싶은 순간을 남겨보세요.
+        </p>
+
+        {!isConfigured() && (
+          <div className="connection-notice">
+            <strong>데모 모드</strong>
+            연결 설정 없이 UI를 둘러보고 있어요.
+          </div>
+        )}
+
+        <Link
+          className="button coral landing-cta"
+          href={isDemoMode() ? "/revisit" : "/login"}
+          style={{ display: "flex", width: "100%" }}
+        >
+          <span style={{ flex: 1, textAlign: "center" }}>
+            {isDemoMode() ? "데모 화면 둘러보기" : "나의 기억 시작하기"}
+          </span>
+          <span style={{ marginLeft: 4, transition: "transform 200ms cubic-bezier(0.22,1,0.36,1)" }}
+            className="landing-cta-arrow">→</span>
+        </Link>
+
+        <Link className="landing-secondary" href="/memories">
+          지난 기억 둘러보기
+        </Link>
+
+        <p className="landing-note">
+          첫 사진 업로드 후 48시간 · 최대 20장<br />
+          JPEG · PNG · WebP
+        </p>
+      </div>
+    </div>
+    </>
+  );
 }
