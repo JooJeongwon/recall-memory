@@ -10,6 +10,7 @@ export function SettingsForm() {
   const [consent, setConsent] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
@@ -57,13 +58,31 @@ export function SettingsForm() {
     router.replace("/login"); router.refresh();
   }
 
-  function exportAll() {
+  async function exportAll() {
     if (isDemoMode()) { setMessage("데모 모드에서는 다운로드할 수 없어요."); return; }
-    const a = document.createElement("a");
-    a.href = "/api/me/export/zip";
-    document.body.append(a);
-    a.click();
-    a.remove();
+    setExporting(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/me/export/zip", { cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(body?.error?.message ?? "잠시 후 다시 시도해주세요.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `memories-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      showToast("다운로드를 시작했어요.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "다운로드에 실패했어요.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -167,8 +186,9 @@ export function SettingsForm() {
           role="button"
           tabIndex={0}
           style={{ cursor: "pointer" }}
-          onClick={exportAll}
-          onKeyDown={(e) => e.key === "Enter" && exportAll()}
+          onClick={() => void exportAll()}
+          onKeyDown={(e) => e.key === "Enter" && void exportAll()}
+          aria-disabled={exporting}
         >
           <div className="settings-row-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -179,7 +199,7 @@ export function SettingsForm() {
           </div>
           <div className="settings-row-text">
             <strong>데이터 내보내기</strong>
-            <p>보관된 사진과 메모를 ZIP으로 다운로드</p>
+            <p>{exporting ? "다운로드 준비 중…" : "보관된 사진과 메모를 ZIP으로 다운로드"}</p>
           </div>
           <div className="settings-row-right">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
