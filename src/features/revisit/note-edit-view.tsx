@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requestApi, RequestError } from "@/lib/api";
-import { photoSchema, type Photo } from "@/lib/validation/contracts";
+import { photoSchema, noteStage, editableNote, noteHint, type Photo } from "@/lib/validation/contracts";
 import { demoImage, demoPhoto, isDemoMode } from "@/lib/demo";
 
 export function NoteEditView({ id }: { id: string }) {
@@ -17,7 +17,7 @@ export function NoteEditView({ id }: { id: string }) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const dirty = text !== (photo?.note_text ?? "");
+  const dirty = text !== (photo ? editableNote(photo) : "");
   const charCount = [...text.trim()].length;
   const overLimit = charCount > 500;
 
@@ -26,7 +26,7 @@ export function NoteEditView({ id }: { id: string }) {
     async function load() {
       if (isDemoMode() && id === demoPhoto.id) {
         setPhoto(demoPhoto);
-        setText(demoPhoto.note_text ?? "");
+        setText(editableNote(demoPhoto));
         setVersion(demoPhoto.version);
         setUrl(demoImage);
         return;
@@ -39,7 +39,7 @@ export function NoteEditView({ id }: { id: string }) {
         if (active) {
           const p = photoSchema.parse(data);
           setPhoto(p);
-          setText(p.note_text ?? "");
+          setText(editableNote(p));
           setVersion(p.version);
           setUrl(asset.url);
         }
@@ -75,10 +75,11 @@ export function NoteEditView({ id }: { id: string }) {
           note_text: text,
           expected_version: version,
           request_id: crypto.randomUUID(),
+          note_stage: noteStage(photo),
         }),
       }));
       setPhoto(result);
-      setText(result.note_text ?? "");
+      setText(editableNote(result));
       setVersion(result.version);
       setConflict(null);
       setSaved(true);
@@ -113,7 +114,7 @@ export function NoteEditView({ id }: { id: string }) {
         <button
           className="button coral note-editor-save"
           onClick={() => void save()}
-          disabled={busy || !!conflict || overLimit}
+          disabled={busy || !photo || !!conflict || overLimit || (!photo.preserved_at && !text.trim())}
         >
           {busy ? "저장 중…" : "저장하기"}
         </button>
@@ -130,17 +131,20 @@ export function NoteEditView({ id }: { id: string }) {
       {/* Editor */}
       <div className="note-editor-body">
         <p className="note-editor-question">이 순간을 기억하고 싶은 이유는?</p>
+        {photo && <p role="status">{noteHint(photo)}</p>}
+        {photo?.first_note_at && <p>첫 번째 메모: {photo.note_text || "(빈 메모)"}</p>}
 
         {conflict && (
           <div className="notice" style={{ marginBottom: 12 }}>
             <strong>다른 기기에서 저장된 내용이 있어요</strong>
-            <p style={{ marginTop: 6, marginBottom: 8 }}>{conflict.note_text || "(빈 메모)"}</p>
+            <p style={{ marginTop: 6, marginBottom: 8 }}>{editableNote(conflict) || "(빈 메모)"}</p>
             <button
               className="ghost"
               style={{ fontSize: ".8rem", height: 34, minHeight: 34 }}
               disabled={busy}
               onClick={() => {
                 setVersion(conflict.version);
+                setPhoto(conflict);
                 setConflict(null);
                 setMessage("작성 중인 내용을 유지했어요.");
               }}

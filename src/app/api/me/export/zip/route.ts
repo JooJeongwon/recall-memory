@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await adminClient()
       .from("photos")
-      .select("id,note_text,original_name,mime_type,ready_at,preserved_at,original_key")
+      .select("id,note_text,first_note_at,second_note_text,second_note_at,original_name,mime_type,ready_at,preserved_at,original_key")
       .eq("user_id", user.id).eq("lifecycle", "ready").not("preserved_at", "is", null);
     if (error) throw new ApiError(503, "TEMPORARY_FAILURE");
     if (!data?.length) throw new ApiError(404, "NOT_FOUND");
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
         const ext = formats[photo.mime_type as keyof typeof formats] ?? "jpg";
         const memory = {
           schema_version: 1, photo_id: photo.id, original_name: photo.original_name,
-          note_text: photo.note_text, preserved_at: photo.preserved_at,
+          note_text: photo.note_text, first_note_at: photo.first_note_at, second_note_text: photo.second_note_text, second_note_at: photo.second_note_at, preserved_at: photo.preserved_at,
           exported_at: new Date().toISOString(),
         };
         files[`${photo.id}/original.${ext}`] = bytes;

@@ -6,6 +6,7 @@ const messages: Record<string, string> = {
   INVALID_INPUT: "입력 내용을 확인해주세요.", UNAUTHENTICATED: "다시 로그인해주세요.",
   ACCOUNT_DELETING: "계정 삭제가 진행 중이에요.", NOT_FOUND: "사진을 찾을 수 없어요.",
   VERSION_CONFLICT: "다른 곳에서 수정된 메모가 있어요.", TRIAL_ENDED: "사진을 추가하는 기간이 끝났어요.",
+  PHOTO_EXPIRED: "메모를 남기는 기간이 끝났어요.",
   PHOTO_NOT_READY: "이 사진은 지금 변경할 수 없어요.", FILE_TOO_LARGE: "사진 크기 제한을 초과했어요.",
   UNSUPPORTED_MEDIA: "JPEG·PNG·정적 WebP 사진을 선택해주세요.",
   LIMIT_EXCEEDED: "사진은 계정당 20장까지 추가할 수 있어요.", INVALID_ORIGIN: "같은 사이트에서 다시 시도해주세요.",

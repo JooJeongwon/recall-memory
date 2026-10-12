@@ -156,6 +156,8 @@ export type Database = {
           original_name: string
           preserved_at: string | null
           ready_at: string | null
+          second_note_at: string | null
+          second_note_text: string
           thumbnail_key: string | null
           trial_id: string
           updated_at: string
@@ -183,6 +185,8 @@ export type Database = {
           original_name: string
           preserved_at?: string | null
           ready_at?: string | null
+          second_note_at?: string | null
+          second_note_text?: string
           thumbnail_key?: string | null
           trial_id: string
           updated_at?: string
@@ -210,6 +214,8 @@ export type Database = {
           original_name?: string
           preserved_at?: string | null
           ready_at?: string | null
+          second_note_at?: string | null
+          second_note_text?: string
           thumbnail_key?: string | null
           trial_id?: string
           updated_at?: string

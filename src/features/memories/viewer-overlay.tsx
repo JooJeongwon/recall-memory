@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RequestError, requestApi } from "@/lib/api";
-import { photoSchema, type Photo } from "@/lib/validation/contracts";
+import { photoSchema, noteStage, editableNote, memoryNote, type Photo } from "@/lib/validation/contracts";
+import { ExportButton } from "../export/export-button";
 import { demoImage, isDemoMode } from "@/lib/demo";
 
 export function ViewerOverlay({
@@ -25,20 +26,22 @@ export function ViewerOverlay({
   const current = photos[index];
 
   const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState(current?.note_text ?? "");
+  const [editText, setEditText] = useState(current ? editableNote(current) : "");
   const [editVersion, setEditVersion] = useState(current?.version ?? 1);
   const [localPhoto, setLocalPhoto] = useState<Photo | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
-  useEffect(() => {
+  const goTo = useCallback((nextIndex: number) => {
+    const next = photos[nextIndex];
+    if (!next || nextIndex === index) return;
+    setIndex(nextIndex);
     setLocalPhoto(null);
     setEditing(false);
-    setEditText(current?.note_text ?? "");
-    setEditVersion(current?.version ?? 1);
+    setEditText(editableNote(next));
+    setEditVersion(next.version);
     setSaveMsg("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+  }, [photos, index]);
 
   /* Preload current + neighbors */
   useEffect(() => {
@@ -65,13 +68,13 @@ export function ViewerOverlay({
   /* Keyboard nav */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
-      if (e.key === "ArrowRight") setIndex((i) => Math.min(photos.length - 1, i + 1));
+      if (e.key === "ArrowLeft") goTo(index - 1);
+      if (e.key === "ArrowRight") goTo(index + 1);
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [photos.length, onClose]);
+  }, [goTo, index, onClose]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -81,9 +84,9 @@ export function ViewerOverlay({
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
     if (Math.abs(dx) < 40) return;
-    if (dx < 0 && index < photos.length - 1) setIndex((i) => i + 1);
-    if (dx > 0 && index > 0) setIndex((i) => i - 1);
-  }, [index, photos.length]);
+    if (dx < 0) goTo(index + 1);
+    if (dx > 0) goTo(index - 1);
+  }, [index, goTo]);
 
   const effectivePhoto = localPhoto ?? current;
   const dateLabel = effectivePhoto?.preserved_at
@@ -101,11 +104,11 @@ export function ViewerOverlay({
           note_text: editText,
           expected_version: editVersion,
           request_id: crypto.randomUUID(),
-          note_stage: "first",
+          note_stage: noteStage(effectivePhoto),
         }),
       }));
       setLocalPhoto(result);
-      setEditText(result.note_text ?? "");
+      setEditText(editableNote(result));
       setEditVersion(result.version);
       setEditing(false);
       setSaveMsg("기억으로 남겼어요.");
@@ -155,10 +158,10 @@ export function ViewerOverlay({
         ) : (
           <p style={{ color: "rgba(255,255,255,.3)", fontSize: ".86rem" }} role="status">불러오는 중…</p>
         )}
-        <button className="viewer-nav-btn prev" disabled={index === 0} aria-label="이전" onClick={() => setIndex((i) => Math.max(0, i - 1))}>
+        <button className="viewer-nav-btn prev" disabled={index === 0} aria-label="이전" onClick={() => goTo(index - 1)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <button className="viewer-nav-btn next" disabled={index === photos.length - 1} aria-label="다음" onClick={() => setIndex((i) => Math.min(photos.length - 1, i + 1))}>
+        <button className="viewer-nav-btn next" disabled={index === photos.length - 1} aria-label="다음" onClick={() => goTo(index + 1)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </div>
@@ -171,6 +174,7 @@ export function ViewerOverlay({
               {dateLabel}
             </p>
           )}
+          {effectivePhoto.first_note_at && <p style={{ color: "rgba(255,255,255,.7)", fontSize: ".8rem", maxHeight: 100, overflow: "auto", whiteSpace: "pre-wrap" }}>첫 번째 메모: {effectivePhoto.note_text || "(빈 메모)"}</p>}
           {editing ? (
             <textarea
               value={editText}
@@ -188,11 +192,11 @@ export function ViewerOverlay({
           ) : (
             <p style={{
               fontSize: ".9rem", lineHeight: 1.55, marginBottom: 12,
-              color: effectivePhoto.note_text ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.3)",
-              fontStyle: effectivePhoto.note_text ? "normal" : "italic",
+              color: memoryNote(effectivePhoto) ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.3)",
+              fontStyle: memoryNote(effectivePhoto) ? "normal" : "italic",
               display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
             }}>
-              {effectivePhoto.note_text || "메모가 없어요."}
+              {memoryNote(effectivePhoto) || "메모가 없어요."}
             </p>
           )}
           {saveMsg && (
@@ -204,8 +208,9 @@ export function ViewerOverlay({
             </p>
           )}
           <div style={{ display: "flex", gap: 8 }}>
+            {!isDemoMode() && <ExportButton id={effectivePhoto.id} compact />}
             <button
-              onClick={() => { setEditing(true); setEditText(effectivePhoto.note_text ?? ""); setSaveMsg(""); }}
+              onClick={() => { setEditing(true); setEditText(editableNote(effectivePhoto)); setSaveMsg(""); }}
               style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 height: 38, borderRadius: 10, border: "none", cursor: "pointer",
@@ -218,7 +223,7 @@ export function ViewerOverlay({
             {!isDemoMode() && (
               <button
                 onClick={() => void handleSave()}
-                disabled={saveBusy}
+                disabled={saveBusy || !editing || [...editText.trim()].length > 500 || (!effectivePhoto.preserved_at && !editText.trim())}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   height: 38, borderRadius: 10, border: "none", cursor: saveBusy ? "not-allowed" : "pointer",
@@ -253,11 +258,11 @@ export function ViewerOverlay({
           <div
             key={p.id}
             className={`viewer-film-thumb${i === index ? " active" : ""}`}
-            onClick={() => setIndex(i)}
+            onClick={() => goTo(i)}
             role="button"
             tabIndex={0}
             aria-label={`사진 ${i + 1}`}
-            onKeyDown={(e) => e.key === "Enter" && setIndex(i)}
+            onKeyDown={(e) => e.key === "Enter" && goTo(i)}
           >
             {urls[p.id] ? (
               // eslint-disable-next-line @next/next/no-img-element

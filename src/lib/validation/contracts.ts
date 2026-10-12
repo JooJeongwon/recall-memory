@@ -38,6 +38,22 @@ export const photoSchema = z.object({
   original_name: z.string(), mime_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
   byte_size: z.number(), ready_at: z.string(), preserved_at: z.string().nullable(),
   first_note_at: z.string().nullable(), first_viewed_at: z.string().nullable(),
+  second_note_text: z.string(), second_note_at: z.string().nullable(),
 });
 export type Photo = z.infer<typeof photoSchema>;
-export const photoColumns = "id,note_text,version,original_name,mime_type,byte_size,ready_at,preserved_at,first_note_at,first_viewed_at";
+export const photoColumns = "id,note_text,version,original_name,mime_type,byte_size,ready_at,preserved_at,first_note_at,first_viewed_at,second_note_text,second_note_at";
+
+export function noteStage(photo: Photo) {
+  return photo.first_note_at ? "second" as const : "first" as const;
+}
+export function editableNote(photo: Photo) {
+  return noteStage(photo) === "second" ? photo.second_note_text : photo.note_text;
+}
+export function memoryNote(photo: Photo) {
+  return photo.second_note_at ? photo.second_note_text : photo.note_text;
+}
+export function noteHint(photo: Photo) {
+  return photo.preserved_at ? "사진과 두 메모는 보관함에 남아 있어요."
+    : photo.first_note_at ? "첫 메모를 저장했어요. 48시간 안에 두 번째 메모를 남기면 보관돼요."
+    : "사진을 추가한 뒤 24시간 안에 첫 메모를, 그 뒤 48시간 안에 두 번째 메모를 남기면 보관돼요.";
+}

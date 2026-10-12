@@ -28,8 +28,9 @@ export function ExportButton({ id, compact }: { id: string; compact?: boolean })
 
   if (compact) {
     return (
-      <>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" onClick={download} style={{ cursor: busy ? "not-allowed" : "pointer" }}>
+      <button type="button" aria-label="사진과 메모 다운로드" disabled={busy} onClick={download}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "inherit", border: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
@@ -38,7 +39,7 @@ export function ExportButton({ id, compact }: { id: string; compact?: boolean })
           {busy ? "준비 중…" : "다운로드"}
         </span>
         {message && <p style={{ fontSize: ".7rem", color: "var(--c-muted)", marginTop: 2 }}>{message}</p>}
-      </>
+      </button>
     );
   }
 

@@ -1,5 +1,15 @@
 # 기억할 권리
 
+## 2026-10-13 운영 호환성 검증
+
+`feat/frontend-seeun`의 Next.js 구성을 기존 Vercel `recall-memory` 프로젝트에서 유지한다. 이미 적용된 `note_retention_checkpoints`에 맞춰 첫 메모와 두 번째 메모를 분리하고, `first_note_at`으로 저장 단계를 선택한다. 보관 완료는 서버의 `preserved_at` 응답으로만 표시한다. 보관함·상세 수정에서 두 번째 메모를 읽고 저장하며, 개별·전체 ZIP의 `memory.json`에는 기존 `note_text`와 함께 `first_note_at`, `second_note_text`, `second_note_at`을 포함한다.
+
+검증: `npm run lint`, `npm run typecheck`, `npm test`(10개), `npm run build` 통과. `npx playwright test --config playwright.checkpoints.config.ts`는 운영 빌드와 실제 Supabase의 격리된 합성 계정·사진으로 첫 메모 저장→새로고침→두 번째 메모→보관함 수정→개별·전체 ZIP의 원본 바이트/두 메모 확인→동시 수정 충돌과 초안 유지·재시도→빈 메모 수정 후 보관 시각 유지를 통과했다. 생성한 테스트 데이터는 정리했다. 기존 보관 사진 3장의 전체 행과 원본·썸네일 6개의 SHA-256 비교가 일치했다.
+
+이 작업은 DB 스키마, migration, 환경변수, 기존 데이터를 변경하지 않는다. 아래 초기 문서의 첫 메모 즉시 보관 설명보다 두 단계 운영 계약이 우선한다. 기존 통합·E2E 전체 묶음은 초기 UI·보존 정책을 전제로 하므로 이번 작업의 완료 근거로 사용하지 않는다. 실제 24/48시간 대기나 이메일 OTP 로그인은 이번 테스트 범위에 포함하지 않았다. 운영 URL: https://recall-memory-smoky.vercel.app/.
+
+테스트의 `CHECKPOINT_BASE_URL`은 배포 후 동일 흐름 검증에 사용할 수 있다. 반드시 해당 배포와 동일한 Supabase 연결을 사용하며, 테스트는 생성한 `checkpoint-*` 계정의 데이터만 수정·정리한다.
+
 사진을 다시 보고 한 줄 메모와 함께 보관하는 모바일 웹앱입니다. 정책은 [PROJECT.md](PROJECT.md), API·DB 계약은 [ARCHITECTURE.md](ARCHITECTURE.md), 검증 상태는 [ROADMAP.md](ROADMAP.md)를 기준으로 합니다.
 
 ## 현재 상태

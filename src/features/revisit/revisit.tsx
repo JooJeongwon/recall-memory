@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { z } from "zod";
 import { motion } from "motion/react";
 import { requestApi, RequestError } from "@/lib/api";
-import { photoSchema, type Photo } from "@/lib/validation/contracts";
+import { photoSchema, noteStage, editableNote, noteHint, type Photo } from "@/lib/validation/contracts";
 import { demoImages, demoPhotos, isDemoMode } from "@/lib/demo";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -143,13 +143,14 @@ function ImmersivePhotoView({
   const [photo, setPhoto] = useState(initialPhoto);
   const [url, setUrl] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [text, setText] = useState(initialPhoto.note_text ?? "");
+  const [loaded, setLoaded] = useState(isDemoMode());
+  const [text, setText] = useState(editableNote(initialPhoto));
   const [version, setVersion] = useState(initialPhoto.version);
   const [conflict, setConflict] = useState<Photo | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const dirty = text !== (photo.note_text ?? "");
+  const dirty = text !== editableNote(photo);
   const charCount = [...text.trim()].length;
   const overLimit = charCount > 500;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -184,10 +185,11 @@ function ImmersivePhotoView({
         if (!active) return;
         const p = photoSchema.parse(data);
         setPhoto(p);
-        setText(p.note_text ?? "");
+        setText(editableNote(p));
         setVersion(p.version);
         setUrl(asset.url);
         setLoadError("");
+        setLoaded(true);
       } catch (e) {
         if (active) setLoadError(e instanceof Error ? e.message : "다시 시도해주세요.");
       }
@@ -209,31 +211,33 @@ function ImmersivePhotoView({
     try {
       if (isDemoMode()) {
         await new Promise((r) => setTimeout(r, 500));
-        const result = { ...photo, note_text: text.trim(), version: version + 1, preserved_at: photo.preserved_at ?? new Date().toISOString() };
+        const now = new Date().toISOString();
+        const result = noteStage(photo) === "first"
+          ? { ...photo, note_text: text.trim(), first_note_at: now, version: version + 1 }
+          : { ...photo, second_note_text: text.trim(), second_note_at: photo.second_note_at ?? now, preserved_at: photo.preserved_at ?? now, version: version + 1 };
         setPhoto(result);
-        setText(result.note_text ?? "");
+        setText(editableNote(result));
         setVersion(result.version);
         setSaved(true);
         setSaveMsg("데모 화면에서는 실제로 저장되지 않아요.");
         onPhotoUpdated(result);
         return;
       }
-      const noteStage = photo.preserved_at ? "second" : "first";
       const result = photoSchema.parse(await requestApi(`/api/photos/${photo.id}/note`, {
         method: "PUT",
         body: JSON.stringify({
           note_text: text,
           expected_version: version,
           request_id: crypto.randomUUID(),
-          note_stage: noteStage,
+          note_stage: noteStage(photo),
         }),
       }));
       setPhoto(result);
-      setText(result.note_text ?? "");
+      setText(editableNote(result));
       setVersion(result.version);
       setConflict(null);
       setSaved(true);
-      setSaveMsg("기억으로 남겼어요.");
+      setSaveMsg(result.preserved_at ? "사진과 두 메모를 보관함에 남겼어요." : "첫 메모를 저장했어요. 두 번째 메모를 남겨주세요.");
       onPhotoUpdated(result);
     } catch (error) {
       if (error instanceof RequestError && error.code === "VERSION_CONFLICT") {
@@ -307,12 +311,14 @@ function ImmersivePhotoView({
         transition={{ duration: 0.38, delay: 0.08, ease }}
       >
         <p className="revisit-note-question">이 순간을 기억하고 싶은 이유는?</p>
+        <p role="status" style={{ color: "rgba(255,255,255,.65)", fontSize: ".8rem", marginBottom: 8 }}>{noteHint(photo)}</p>
+        {photo.first_note_at && <p style={{ color: "rgba(255,255,255,.8)", fontSize: ".82rem", whiteSpace: "pre-wrap", maxHeight: 100, overflow: "auto" }}>첫 번째 메모: {photo.note_text || "(빈 메모)"}</p>}
 
         {conflict && (
           <div className="revisit-conflict">
             <strong>다른 기기에서 저장된 내용이 있어요</strong>
             <p style={{ color: "rgba(255,255,255,.5)", fontSize: ".84rem", margin: "4px 0 8px" }}>
-              {conflict.note_text || "(빈 메모)"}
+              {editableNote(conflict) || "(빈 메모)"}
             </p>
             <button
               style={{
@@ -323,6 +329,7 @@ function ImmersivePhotoView({
               disabled={busy}
               onClick={() => {
                 setVersion(conflict.version);
+                setPhoto(conflict);
                 setConflict(null);
                 setSaveMsg("작성 중인 내용을 유지했어요. 저장해주세요.");
               }}
@@ -337,7 +344,7 @@ function ImmersivePhotoView({
           className="revisit-note-textarea"
           value={text}
           onChange={(e) => { setText(e.target.value); setSaved(false); setSaveMsg(""); }}
-          disabled={busy}
+          disabled={busy || !loaded}
           placeholder="한 줄이어도 좋아요."
           aria-label="기억 메모"
           rows={3}
@@ -352,11 +359,11 @@ function ImmersivePhotoView({
         <motion.button
           className="revisit-save-btn"
           onClick={() => void save()}
-          disabled={busy || !!conflict || overLimit || (!photo.preserved_at && !text.trim())}
+          disabled={busy || !loaded || !!conflict || overLimit || (!photo.preserved_at && !text.trim())}
           whileTap={{ scale: 0.97 }}
           transition={{ duration: 0.15 }}
         >
-          {busy ? "저장 중…" : saved ? "✓ 기억으로 남겼어요" : "기억으로 남기기"}
+          {busy ? "저장 중…" : photo.preserved_at ? "메모 수정하기" : photo.first_note_at ? "두 번째 메모 남기기" : "첫 번째 메모 남기기"}
         </motion.button>
 
         {saveMsg && (

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requestApi } from "@/lib/api";
-import { photoSchema, type Photo } from "@/lib/validation/contracts";
+import { photoSchema, memoryNote, type Photo } from "@/lib/validation/contracts";
 import { ExportButton } from "../export/export-button";
 import { DeletePhoto } from "../memories/delete-photo";
 import { demoImage, demoPhoto, isDemoMode } from "@/lib/demo";
@@ -69,8 +69,8 @@ export function PhotoView({ id }: { id: string }) {
     ? new Date(photo.ready_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
     : null;
 
-  const titleText = photo.note_text
-    ? photo.note_text.split(/[.。!！\n]/)[0].trim().slice(0, 20) || "기억"
+  const titleText = memoryNote(photo)
+    ? memoryNote(photo).split(/[.。!！\n]/)[0].trim().slice(0, 20) || "기억"
     : "사진";
 
   return (
@@ -118,9 +118,10 @@ export function PhotoView({ id }: { id: string }) {
         )}
 
         <h1 className="photo-detail-title">{titleText}</h1>
+        {photo.first_note_at && <p>첫 번째 메모: {photo.note_text || "(빈 메모)"}</p>}
 
-        {photo.note_text ? (
-          <p className="photo-detail-note">{photo.note_text}</p>
+        {memoryNote(photo) ? (
+          <p className="photo-detail-note">{memoryNote(photo)}</p>
         ) : (
           <p className="photo-detail-note" style={{ color: "var(--c-muted)", fontStyle: "italic" }}>
             아직 메모가 없어요.

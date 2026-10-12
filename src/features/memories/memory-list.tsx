@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { z } from "zod";
 import { motion } from "motion/react";
 import { requestApi } from "@/lib/api";
-import { photoSchema, type Photo } from "@/lib/validation/contracts";
+import { photoSchema, memoryNote, type Photo } from "@/lib/validation/contracts";
 import { demoImages, demoPhotos, isDemoMode } from "@/lib/demo";
 import { ViewerOverlay } from "./viewer-overlay";
 
@@ -149,7 +149,7 @@ function GalleryTile({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
       variants={tileVariants}
       role="button"
       tabIndex={0}
-      aria-label={photo.note_text ? photo.note_text.slice(0, 40) : "사진 열기"}
+      aria-label={memoryNote(photo) ? memoryNote(photo).slice(0, 40) : "사진 열기"}
       onClick={onOpen}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
       whileHover={{ scale: 1.03, zIndex: 2 }}
@@ -162,9 +162,9 @@ function GalleryTile({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
       ) : (
         <div className="gallery-tile-skeleton" />
       )}
-      {photo.note_text && (
+      {memoryNote(photo) && (
         <div className="gallery-tile-overlay">
-          <p className="gallery-tile-note">{photo.note_text}</p>
+          <p className="gallery-tile-note">{memoryNote(photo)}</p>
         </div>
       )}
     </motion.div>

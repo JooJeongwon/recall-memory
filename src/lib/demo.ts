@@ -39,6 +39,8 @@ export const demoPhoto: Photo = {
   preserved_at: "2026-10-10T08:30:00.000Z",
   first_note_at: "2026-10-10T08:30:00.000Z",
   first_viewed_at: null,
+  second_note_text: "다시 꺼내 보고 싶은 순간",
+  second_note_at: "2026-10-10T10:30:00.000Z",
 };
 
 export const demoPhoto2: Photo = {
@@ -52,6 +54,8 @@ export const demoPhoto2: Photo = {
   preserved_at: "2026-10-10T09:30:00.000Z",
   first_note_at: "2026-10-10T09:30:00.000Z",
   first_viewed_at: null,
+  second_note_text: "다시 꺼내 보고 싶은 순간",
+  second_note_at: "2026-10-10T10:30:00.000Z",
 };
 
 export const demoPhotos = [demoPhoto, demoPhoto2];

@@ -7,6 +7,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const { id } = await context.params;
   return endpoint(async () => {
     const { photo, url, expires_at } = await asset(id, "original");
-return json({ url, expires_at, original_filename: `original.${formats[photo.mime_type]}`, memory: { schema_version: 1, photo_id: photo.id, original_name: photo.original_name, note_text: photo.note_text, uploaded_at: photo.ready_at, preserved_at: photo.preserved_at, exported_at: new Date().toISOString() } });
+return json({ url, expires_at, original_filename: `original.${formats[photo.mime_type]}`, memory: { schema_version: 1, photo_id: photo.id, original_name: photo.original_name, note_text: photo.note_text, first_note_at: photo.first_note_at, second_note_text: photo.second_note_text, second_note_at: photo.second_note_at, uploaded_at: photo.ready_at, preserved_at: photo.preserved_at, exported_at: new Date().toISOString() } });
   })(request);
 }
