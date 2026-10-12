@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { requestApi } from "@/lib/api";
@@ -11,7 +11,17 @@ export function SettingsForm() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [email, setEmail] = useState("");
+
+  function showToast(msg: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    setToastVisible(true);
+    toastTimer.current = setTimeout(() => setToastVisible(false), 2500);
+  }
 
   useEffect(() => {
     requestApi<{ profile: { analytics_consent: boolean } }>("/api/me")
@@ -34,7 +44,7 @@ export function SettingsForm() {
         method: "PATCH",
         body: JSON.stringify({ analytics_consent: consent, timezone: "Asia/Seoul" }),
       });
-      setMessage("설정을 저장했어요.");
+      showToast("동의 설정을 저장했어요.");
     } catch (e) { setMessage(e instanceof Error ? e.message : "다시 시도해주세요."); }
     finally { setBusy(false); }
   }
@@ -63,6 +73,41 @@ export function SettingsForm() {
 
   return (
     <div className="settings-root">
+      {/* Toast notification */}
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          position: "fixed",
+          top: "env(safe-area-inset-top, 0px)",
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          zIndex: 9999,
+          pointerEvents: "none",
+          padding: "12px 16px 0",
+          transition: "opacity 0.25s, transform 0.25s",
+          opacity: toastVisible ? 1 : 0,
+          transform: toastVisible ? "translateY(0)" : "translateY(-8px)",
+        }}
+      >
+        {toast && (
+          <div style={{
+            background: "var(--c-fg, #111)",
+            color: "var(--c-bg, #fff)",
+            borderRadius: 12,
+            padding: "10px 18px",
+            fontSize: ".88rem",
+            fontWeight: 500,
+            boxShadow: "0 4px 16px rgba(0,0,0,.18)",
+            maxWidth: 280,
+            textAlign: "center",
+          }}>
+            {toast}
+          </div>
+        )}
+      </div>
       {/* Profile */}
       <div className="settings-profile-row">
         <div className="settings-profile-left">
