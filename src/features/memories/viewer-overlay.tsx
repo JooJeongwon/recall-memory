@@ -26,10 +26,7 @@ export function ViewerOverlay({
     toLoad.forEach((i) => {
       const p = photos[i];
       if (!p || urls[p.id]) return;
-      if (isDemoMode()) {
-        setUrls((u) => ({ ...u, [p.id]: demoImage }));
-        return;
-      }
+      if (isDemoMode()) { setUrls((u) => ({ ...u, [p.id]: demoImage })); return; }
       requestApi<{ url: string }>(`/api/photos/${p.id}/asset?kind=thumbnail`)
         .then((data) => setUrls((u) => ({ ...u, [p.id]: data.url })))
         .catch(() => {});
@@ -68,6 +65,10 @@ export function ViewerOverlay({
     if (dx > 0 && index > 0) setIndex((i) => i - 1);
   }, [index, photos.length]);
 
+  const dateLabel = current?.preserved_at
+    ? new Date(current.preserved_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+    : null;
+
   return (
     <div className="viewer-screen" aria-modal="true" role="dialog" aria-label="사진 전체 보기">
       {/* Top bar */}
@@ -82,39 +83,78 @@ export function ViewerOverlay({
       </div>
 
       {/* Photo area */}
-      <div
-        className="viewer-photo-area"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="viewer-photo-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {current && urls[current.id] ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={urls[current.id]} alt={current.note_text ?? "사진"} />
         ) : (
           <p style={{ color: "rgba(255,255,255,.3)", fontSize: ".86rem" }} role="status">불러오는 중…</p>
         )}
-
-        <button
-          className="viewer-nav-btn prev"
-          disabled={index === 0}
-          aria-label="이전"
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
+        <button className="viewer-nav-btn prev" disabled={index === 0} aria-label="이전" onClick={() => setIndex((i) => Math.max(0, i - 1))}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <button
-          className="viewer-nav-btn next"
-          disabled={index === photos.length - 1}
-          aria-label="다음"
-          onClick={() => setIndex((i) => Math.min(photos.length - 1, i + 1))}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
+        <button className="viewer-nav-btn next" disabled={index === photos.length - 1} aria-label="다음" onClick={() => setIndex((i) => Math.min(photos.length - 1, i + 1))}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </div>
+
+      {/* Detail panel */}
+      {current && (
+        <div style={{
+          padding: "14px 20px 8px",
+          color: "#fff",
+          borderTop: "1px solid rgba(255,255,255,.08)",
+        }}>
+          {dateLabel && (
+            <p style={{ fontSize: ".74rem", color: "rgba(255,255,255,.42)", marginBottom: 6, letterSpacing: ".02em" }}>
+              {dateLabel}
+            </p>
+          )}
+          <p style={{
+            fontSize: ".9rem", lineHeight: 1.55, marginBottom: 12,
+            color: current.note_text ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.3)",
+            fontStyle: current.note_text ? "normal" : "italic",
+            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {current.note_text || "메모가 없어요."}
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <a
+              href={`/photos/${current.id}/edit`}
+              style={{
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                height: 38, borderRadius: 10,
+                background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)",
+                fontSize: ".8rem", fontWeight: 600, textDecoration: "none",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              수정
+            </a>
+            {!isDemoMode() && (
+              <a
+                href={`/api/photos/${current.id}/export/zip`}
+                style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  height: 38, borderRadius: 10,
+                  background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)",
+                  fontSize: ".8rem", fontWeight: 600, textDecoration: "none",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                가져가기
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filmstrip */}
       <div className="viewer-filmstrip" ref={filmRef}>

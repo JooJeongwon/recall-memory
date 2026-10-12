@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { requestApi } from "@/lib/api";
 import { isDemoMode } from "@/lib/demo";
-import { createBulkArchive } from "@/features/export/archive";
 
 export function SettingsForm() {
   const router = useRouter();
@@ -58,39 +57,13 @@ export function SettingsForm() {
     router.replace("/login"); router.refresh();
   }
 
-  async function exportAll() {
+  function exportAll() {
     if (isDemoMode()) { setMessage("데모 모드에서는 다운로드할 수 없어요."); return; }
-    setBusy(true); setMessage("");
-    try {
-      const items: { id: string; originalName: string; bytes: Uint8Array; memory: unknown }[] = [];
-      let cursor: string | null = null;
-      while (true) {
-        const cursorParam: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-        const qs: string = `/api/photos?scope=preserved&limit=20${cursorParam}`;
-        const page = await requestApi<{ photos: { id: string }[]; next_cursor: string | null }>(qs);
-        for (const photo of page.photos) {
-          const data = await requestApi<{ url: string; original_filename: string; memory: unknown }>(
-            `/api/photos/${photo.id}/export`
-          );
-          const res = await fetch(data.url, { cache: "no-store", referrerPolicy: "no-referrer" });
-          if (!res.ok) throw new Error("사진을 가져오지 못했어요. 다시 시도해주세요.");
-          items.push({ id: photo.id, originalName: data.original_filename, bytes: new Uint8Array(await res.arrayBuffer()), memory: data.memory });
-        }
-        if (!page.next_cursor) break;
-        cursor = page.next_cursor;
-      }
-
-      if (items.length === 0) { setMessage("내보낼 보관 사진이 없어요."); return; }
-
-      const archive = createBulkArchive(items);
-      const blob = URL.createObjectURL(new Blob([new Uint8Array(archive)], { type: "application/zip" }));
-      const link = document.createElement("a");
-      link.href = blob; link.download = `memories-${new Date().toISOString().slice(0, 10)}.zip`;
-      document.body.append(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(blob), 60_000);
-      showToast(`${items.length}장의 사진을 ZIP으로 가져왔어요.`);
-    } catch (e) { setMessage(e instanceof Error ? e.message : "다시 시도해주세요."); }
-    finally { setBusy(false); }
+    const a = document.createElement("a");
+    a.href = "/api/me/export/zip";
+    document.body.append(a);
+    a.click();
+    a.remove();
   }
 
   async function deleteAccount() {
@@ -207,9 +180,9 @@ export function SettingsForm() {
           className="settings-row"
           role="button"
           tabIndex={0}
-          style={{ cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}
-          onClick={() => !busy && void exportAll()}
-          onKeyDown={(e) => e.key === "Enter" && !busy && void exportAll()}
+          style={{ cursor: "pointer" }}
+          onClick={exportAll}
+          onKeyDown={(e) => e.key === "Enter" && exportAll()}
         >
           <div className="settings-row-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -220,7 +193,7 @@ export function SettingsForm() {
           </div>
           <div className="settings-row-text">
             <strong>데이터 내보내기</strong>
-            <p>{busy ? "ZIP 준비 중…" : "보관된 사진과 메모를 ZIP으로 다운로드"}</p>
+            <p>보관된 사진과 메모를 ZIP으로 다운로드</p>
           </div>
           <div className="settings-row-right">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
