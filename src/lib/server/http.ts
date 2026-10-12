@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
 const messages: Record<string, string> = {
+  FORBIDDEN: "이 계정은 통계를 볼 수 없어요.",
   INVALID_INPUT: "입력 내용을 확인해주세요.", UNAUTHENTICATED: "다시 로그인해주세요.",
   ACCOUNT_DELETING: "계정 삭제가 진행 중이에요.", NOT_FOUND: "사진을 찾을 수 없어요.",
   VERSION_CONFLICT: "다른 곳에서 수정된 메모가 있어요.", TRIAL_ENDED: "사진을 추가하는 기간이 끝났어요.",
@@ -93,7 +94,7 @@ export function endpoint(handler: (request: Request) => Promise<Response>, opera
 }
 export function dbError(error: { message: string } | null, stage = "database") {
   if (!error) return;
-  const status: Record<string, number> = { NOT_FOUND: 404, ACCOUNT_DELETING: 403, VERSION_CONFLICT: 409,
+  const status: Record<string, number> = { NOT_FOUND: 404, ACCOUNT_DELETING: 403, FORBIDDEN: 403, VERSION_CONFLICT: 409,
     TRIAL_ENDED: 409, PHOTO_NOT_READY: 409, LIMIT_EXCEEDED: 429, INVALID_INPUT: 400 };
   const code = Object.keys(status).find((code) => error.message === code);
   throw new ApiError(code ? status[code] : 503, code ?? "TEMPORARY_FAILURE", undefined, { stage, cause: error });

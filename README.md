@@ -4,6 +4,14 @@
 
 ## 현재 상태
 
+2026-10-12 방문·사용자 통계 도구를 기존 Supabase와 Worker에 적용했다. [관리자 통계](https://recall-memory.jwjoo0512.workers.dev/admin/analytics)는 `jwjoo0512@gmail.com`·`elice0105412@gmail.com`의 확인된 Google 로그인만 허용한다. 설정 화면에도 관리자용 링크가 나타난다. [QR 표시 링크](https://recall-memory.jwjoo0512.workers.dev/qr)는 `/?source=qr`로 이동한다. 일반 주소를 담은 기존 QR은 직접 방문과 구분하지 못하지만 전체 방문 수집에는 포함된다. 적용 이전의 방문은 복구하지 않는다.
+
+방문 세션(같은 탭에서 30분 이내 이어진 화면 조회), 로그인 없이 끝난 세션, 로그인 세션, 사진 사용 이력이 있는 로그인 세션, 화면 조회를 각각 표시한다. 사진 사용자 세션은 로그인 세션의 부분집합이다. 현재 가입·사진 사용 시작 계정 수는 DB의 운영 데이터 집계이고, 기간 중 로그인 고유 계정·제품 행동은 분석 동의한 계정만 포함한다. 오늘·최근 7/30/90일을 한국 시간으로 조회하고 집계 JSON을 다운로드한다. 관리자 통계 화면·개발·자동 브라우저·추적 거부·알려진 봇을 제외한다. 익명 세션을 실제 고유 사람 수로 표시하지 않으며 광고 차단·통신 실패·저장소 차단·공유 IP 속도 제한으로 수신되지 않은 방문은 빠질 수 있다.
+
+사용자가 결정한 방문 원본 보관 기간은 90일이다. `recall-visit-retention`은 매일 18:15 UTC(한국 시간 03:15)에 90일 초과 방문 기록을 정리한다. 계정과 연결된 기록은 동의 철회·계정 삭제 때 제거돼 과거 집계도 바뀔 수 있다. 사진·메모·파일명·이메일·원문 URL·IP는 방문 테이블에 저장하지 않는다. migration `20261012122621`, `20261012123105`, `20261012123523`을 원격에 적용했고 실제 스키마에서 타입을 재생성했다. 신규 migration의 보관 정리 일정은 기존 프로젝트에서 활성화된 `pg_cron`을 사용한다. 새 DB에서는 먼저 `pg_cron`을 활성화해야 한다.
+
+단위 테스트 31개·lint·typecheck·Worker build와 실제 서버 역할의 관리자 집계 RPC·일반/익명 접근 거절을 확인했다. 운영 `/`·`/login` 200, `/qr` 302, 비로그인 통계 API 401과 관리자 화면 로그인 이동을 확인했다. 자동 브라우저·추적 거부·잘못된 입력 검증은 실제 방문 기록을 생성하지 않고 수행했다. 로컬 CLI는 Cloudflare 인증 토큰이 없어 배포가 실패했고, 연결된 Cloudflare 도구의 직접 업로드로 기존 secret binding을 보존해 배포했다. 실제 Google 관리자 로그인 화면, 참여자 수집·전환, 실기기와 빈 DB migration 재구성·90일 경과 정리는 미검증이다. Docker가 실행 중이지 않아 로컬 DB fixture 검증은 하지 않았다.
+
 2026년 10월 11일 Cloudflare Worker `recall-memory`를 [https://recall-memory.jwjoo0512.workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포하고 같은 원격 Supabase 프로젝트를 MVP 운영에도 사용하도록 연결했습니다. Supabase URL·공개 키·서버 비밀 키와 `APP_BASE_URL`은 Cloudflare secret binding으로 설정했습니다. `/`·`/login`은 HTTP 200, 비로그인 `/api/me`는 예상된 `401 UNAUTHENTICATED`를 반환합니다. Supabase가 Worker callback 주소를 허용하는 것도 사전 확인했지만, Worker에서 실제 Google 로그인을 끝내지는 않았습니다. `.github/workflows/deploy-worker.yml`은 `main` push 또는 수동 실행으로 배포하며, GitHub 저장소에 `CLOUDFLARE_API_TOKEN` secret을 추가하기 전까지는 안전하게 배포를 건너뜁니다.
 
 2026년 10월 10일 현재 lint·typecheck·단위 테스트 15개·원격 통합 테스트 6개·모바일 Chromium E2E 8개와 운영 빌드가 통과했습니다. 당시 통합/E2E는 합성 계정과 파일을 만들고 정리했습니다. 실제 모바일 기기·오프라인 시험과 48시간 경과 후 재접속은 남아 있습니다. 2026-10-10 Storage 전송 변경 후 Supabase 원격 로그 10분 집계에서 합성 파일명·메모 문구·`token=`은 없었습니다. 관리 로그에는 계정·IP·요청 경로 같은 메타데이터가 남으므로 운영 로그 접근·보존 검토가 필요합니다. 원격 migration `20261010053800`, `20261010053830`, `20261010055100`과 예약 업로드 정책의 `private` 함수 배치를 확인했습니다. Google OAuth 개발 로그인을 확인했고, 콜백이 시작한 loopback 주소를 유지하도록 수정했습니다. 같은 Supabase 프로젝트의 10분 Cron은 HTTP 200을 반환하며 현재 운영 DB에도 적용됩니다. 합성 업로드와 계정 삭제 대상으로 유지관리 worker의 실제 Storage·DB·Auth 정리까지 검증했습니다. 운영 모드에서는 이 DB를 통합/E2E fixture로 쓰지 못하도록 차단합니다.

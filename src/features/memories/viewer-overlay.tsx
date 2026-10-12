@@ -91,7 +91,11 @@ export function ViewerOverlay({
       <div className="viewer-photo-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {current && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={isDemoMode() ? demoImages[current.id] : `/api/photos/${current.id}/asset?kind=thumbnail&retry=${retry}`} alt={current.note_text || "사진"} onError={() => setMessage("사진을 불러오지 못했어요. 다시 시도해주세요.")} />
+          <img src={isDemoMode() ? demoImages[current.id] : `/api/photos/${current.id}/asset?kind=thumbnail&retry=${retry}`} alt={current.note_text || "사진"} onError={() => setMessage("사진을 불러오지 못했어요. 다시 시도해주세요.")}
+            onLoad={() => {
+              if (!isDemoMode()) void requestApi("/api/events", { method: "POST", body: JSON.stringify({ name: "memory_opened", photo_id: current.id,
+                client_event_id: crypto.randomUUID(), visit_context: "unknown" }) }).catch(() => {});
+            }} />
         )}
         {message && <div><p role="alert">{message}</p><button onClick={() => { setMessage(""); setRetry((v) => v + 1); }}>다시 불러오기</button></div>}
 

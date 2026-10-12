@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { NavLink } from "@/components/nav-link";
+import { VisitTracker } from "@/components/visit-tracker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        <VisitTracker />
         <a className="skip" href="#main">본문으로 이동</a>
         <main id="main">{children}</main>
         <nav className="app-nav" aria-label="주요 메뉴">

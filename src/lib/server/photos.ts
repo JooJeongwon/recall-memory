@@ -8,8 +8,10 @@ import { photoSchema, photoColumns, uuid } from "../validation/contracts";
 import type { Database } from "@/types/database";
 
 type Functions = Database["public"]["Functions"];
+// 실제 DB의 RPC 오버로드도 각 인자의 단계 필드를 유지합니다.
+type UserlessArgs<Args> = Args extends unknown ? Omit<Args, "p_user_id"> : never;
 // 인증 결과는 같은 서버 요청 내부에서만 재사용합니다.
-export async function rpc<Name extends keyof Functions>(name: Name, args: Omit<Functions[Name]["Args"], "p_user_id">,
+export async function rpc<Name extends keyof Functions>(name: Name, args: UserlessArgs<Functions[Name]["Args"]>,
   auth?: Awaited<ReturnType<typeof requireUser>>) {
   const { user } = auth ?? await requireUser();
   const params = { ...args, p_user_id: user.id } as Functions[Name]["Args"];

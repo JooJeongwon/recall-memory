@@ -373,3 +373,14 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 충돌 해결: Worker 실행·인증·Origin 검사·요청 로그·사진별 기한·Storage 세션 업로드와 바이너리 스트리밍 계약을 유지했다. 다시 보기·보관함·수정 화면은 기존 두 단계 메모 편집기를 공유하고, 미저장 입력 이동 안내와 버전 충돌 처리를 유지한다. 설정의 계정 삭제도 기존 API·진행 화면으로 이어진다. 서버 ZIP 대신 기존 API로 원본과 두 메모를 받아 브라우저에서 개별·일괄 ZIP을 만든다.
 - 검증: Node 22.18.0에서 lint(경고 없음), typecheck, 단위 테스트 25개, 소개·오프닝 모바일 Chromium E2E 13개, Worker build 통과. ZIP 단위 테스트는 원본 바이트·UTF-8 두 메모·사진별 폴더와 원본 접근 실패·연결 단절 거절을 확인했다. 모션 감소 설정에서 hydration 오류가 없고 이미지 로딩 실패에도 오프닝이 종료되는 것을 확인했다. 변경된 화면에 맞춰 기존 사진 흐름 E2E의 선택자와 재시도 검증도 갱신했다.
 - 제한: 운영 Supabase에 fixture를 만들지 않았다. 통합 DB·인증된 사진 흐름 E2E·일괄 다운로드 실기기 메모리 검증은 이번에 실행하지 않았다. 실제 Worker OAuth·48시간 재접속·복구 연습과 운영 배포 결과 확인은 남아 있다. MVP 완료나 보존 정책 전체 검증으로 표시하지 않는다.
+
+## 33. 방문·사용자 통계와 QR 유입 — 2026년 10월 12일
+
+- 사용자 요청: QR과 일반 방문을 포함하는 수집, 단순 방문·로그인·사진 사용자 구분. 관리자 Google 계정은 `jwjoo0512@gmail.com`과 `elice0105412@gmail.com`, 방문 원본 보관은 90일로 지정했다.
+- 구현: 30분 탭 세션·고정 유입/화면 분류를 보내는 production 수집기, 같은 이벤트 ID 재전송 중복 방지, 관리자 집계 화면·JSON 다운로드·설정 링크, `/qr` → `/?source=qr`. 현재 가입/사용 시작 계정과 동의한 로그인 고유 계정·행동 기록을 구분한다. 보관함 뷰어 실제 이미지 로드와 일괄 ZIP 생성에도 기존 동의형 이벤트를 연결했다.
+- 권한·개인정보: `visit_events`와 `analytics_administrators`에 RLS·최소 GRANT. 방문 API는 동일 출처·엄격한 입력·Auth 검증·추적 거부·봇 검사·Cloudflare 속도 제한을 적용한다. 사용자 구분은 DB의 활성 프로필·사용 시작 시각으로 결정하고, 계정 ID는 동의할 때만 연결한다. 관리자 이메일은 검증된 Auth 응답에서 확인하며 DB에서도 관리자 명단을 검사한다. 동의 철회·계정 삭제 접수 시 식별 가능한 방문 기록을 지운다. 사진·메모·파일명·이메일·URL·IP는 방문 테이블에 저장하지 않는다.
+- 원격 반영: migration 이력 `20261012122621_visit_analytics`, `20261012123105_analytics_admin_access`, `20261012123523_visit_analytics_retention`과 로컬 파일명을 맞췄다. `recall-visit-retention` Cron이 활성 상태이고 `15 18 * * *`에 90일 초과 방문 기록만 정리하도록 등록됐다. 실제 원격 DB에서 타입을 생성했고, 기존 RPC 오버로드의 인자 필드를 보존하도록 공유 TS 타입을 수정했다.
+- 검증: lint·typecheck·단위 테스트 31개·Worker build 통과. 서버 역할로 두 관리자 집계 성공·일반 계정 거절·익명 테이블/RPC 직접 접근 차단·관리자 방문 무기록을 확인했다. 신규 함수는 SECURITY INVOKER·서비스 전용 EXECUTE이며 새 테이블은 RLS가 켜져 있다. 운영 홈페이지·로그인 200, QR 302, 비로그인 통계 API 401·관리자 화면 307 로그인 이동, 외부 Origin 403·사용자 ID를 넣은 입력 400·봇/DNT 무기록 204를 확인했다. 운영 모바일 뷰포트 브라우저에서 QR 이동과 새 소개 화면에 pageerror가 없고 자동 방문이 수집되지 않음을 확인했다. 운영 DB fixture는 생성하지 않았다.
+- 배포: 로컬 `npm run deploy`는 Cloudflare CLI 인증 토큰 부족으로 실패했다. 연결된 Cloudflare API로 build asset·Worker 모듈을 업로드하며 `keep_bindings: [secret_text]`로 기존 네 secret을 보존했다. Worker는 `nodejs_compat`·`VISIT_LIMIT`·invocation logs/traces 비활성화·query string 제거를 적용한다. GitHub 배포 secret은 여전히 없다.
+- 제한: 기존 QR의 실제 주소는 전달받지 못했다. 일반 주소를 담은 QR은 직접 방문과 분리할 수 없으며 새 QR은 `/qr` 링크를 써야 한다. 브라우저 탭·기기·저장소 변경에 따른 중복, 스크립트 차단·통신 실패·속도 제한에 따른 누락과 자동 방문 오염을 완전히 막지 못한다. 수집 이전 기록을 복구하거나 방문 세션을 실제 사람 수로 표시하지 않는다. 실제 Google 관리자 로그인·참여자 전환·실기기·90일 경과 정리·빈 DB 재구성은 미검증이며 Docker가 중지돼 로컬 DB fixture 검증은 수행하지 않았다. 새 DB에는 pg_cron 활성화가 선행돼야 한다.
+- Advisor: 서버 전용 두 신규 테이블의 무정책 RLS INFO는 사용자 접근 전체 차단에 따른 결과다. 기존 공개 `can_upload_reserved_object`의 SECURITY DEFINER 실행 WARN과 leaked password protection WARN은 이번 통계 변경과 별개로 남아 있다. 사진 보존·실제 48시간 재접속 및 MVP 전체 완료로 표시하지 않는다.

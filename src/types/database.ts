@@ -14,6 +14,26 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_administrators: {
+        Row: {
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_administrators_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       cleanup_jobs: {
         Row: {
           attempts: number
@@ -152,12 +172,12 @@ export type Database = {
           lifecycle: string
           mime_type: string
           note_text: string
-          second_note_at: string | null
-          second_note_text: string
           original_key: string
           original_name: string
           preserved_at: string | null
           ready_at: string | null
+          second_note_at: string | null
+          second_note_text: string
           thumbnail_key: string | null
           trial_id: string
           updated_at: string
@@ -181,12 +201,12 @@ export type Database = {
           lifecycle?: string
           mime_type: string
           note_text?: string
-          second_note_at?: string | null
-          second_note_text?: string
           original_key: string
           original_name: string
           preserved_at?: string | null
           ready_at?: string | null
+          second_note_at?: string | null
+          second_note_text?: string
           thumbnail_key?: string | null
           trial_id: string
           updated_at?: string
@@ -210,12 +230,12 @@ export type Database = {
           lifecycle?: string
           mime_type?: string
           note_text?: string
-          second_note_at?: string | null
-          second_note_text?: string
           original_key?: string
           original_name?: string
           preserved_at?: string | null
           ready_at?: string | null
+          second_note_at?: string | null
+          second_note_text?: string
           thumbnail_key?: string | null
           trial_id?: string
           updated_at?: string
@@ -305,12 +325,55 @@ export type Database = {
           },
         ]
       }
+      visit_events: {
+        Row: {
+          actor: string
+          id: string
+          occurred_at: string
+          page: string
+          session_id: string
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          actor: string
+          id: string
+          occurred_at?: string
+          page: string
+          session_id: string
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          actor?: string
+          id?: string
+          occurred_at?: string
+          page?: string
+          session_id?: string
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      analytics_report: {
+        Args: { p_admin_id: string; p_days?: number }
+        Returns: Json
+      }
       app_policy: { Args: never; Returns: Json }
+      can_upload_reserved_object: { Args: { p_name: string }; Returns: boolean }
       claim_cleanup: {
         Args: never
         Returns: {
@@ -373,6 +436,7 @@ export type Database = {
       }
       me_state: { Args: { p_user_id: string }; Returns: Json }
       purge_account_data: { Args: { p_user_id: string }; Returns: undefined }
+      purge_visit_events: { Args: never; Returns: number }
       queue_photo_delete: {
         Args: { p_kind?: string; p_photo_id: string; p_user_id: string }
         Returns: {
@@ -409,12 +473,18 @@ export type Database = {
         }
         Returns: undefined
       }
-      release_upload: {
-        Args: { p_photo_id: string; p_token: string; p_user_id: string }
+      record_visit: {
+        Args: {
+          p_event_id: string
+          p_page: string
+          p_session_id: string
+          p_source: string
+          p_user_id?: string
+        }
         Returns: undefined
       }
-      restore_photo: {
-        Args: { p_photo_id: string; p_user_id: string }
+      release_upload: {
+        Args: { p_photo_id: string; p_token: string; p_user_id: string }
         Returns: undefined
       }
       request_account_delete: {
@@ -447,17 +517,32 @@ export type Database = {
         Args: { p_files: Json; p_user_id: string }
         Returns: Json
       }
-      save_note: {
-        Args: {
-          p_expected_version: number
-          p_note_text: string
-          p_note_stage: string
-          p_photo_id: string
-          p_request_id: string
-          p_user_id: string
-        }
-        Returns: Json
+      restore_photo: {
+        Args: { p_photo_id: string; p_user_id: string }
+        Returns: undefined
       }
+      save_note:
+        | {
+            Args: {
+              p_expected_version: number
+              p_note_text: string
+              p_photo_id: string
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_expected_version: number
+              p_note_stage: string
+              p_note_text: string
+              p_photo_id: string
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
       set_preferences: {
         Args: { p_consent: boolean; p_timezone: string; p_user_id: string }
         Returns: {
@@ -474,11 +559,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      sweep_incomplete: { Args: never; Returns: undefined }
       soft_delete_photo: {
         Args: { p_photo_id: string; p_user_id: string }
         Returns: undefined
       }
+      sweep_incomplete: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
