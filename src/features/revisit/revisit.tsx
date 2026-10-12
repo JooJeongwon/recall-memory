@@ -143,13 +143,16 @@ function ImmersivePhotoView({
   const [photo, setPhoto] = useState(initialPhoto);
   const [url, setUrl] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [text, setText] = useState(initialPhoto.note_text ?? "");
+  const noteStage: "first" | "second" = photo.first_note_at ? "second" : "first";
+  const [text, setText] = useState(
+    initialPhoto.first_note_at ? (initialPhoto.second_note_text ?? "") : (initialPhoto.note_text ?? "")
+  );
   const [version, setVersion] = useState(initialPhoto.version);
   const [conflict, setConflict] = useState<Photo | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const dirty = text !== (photo.note_text ?? "");
+  const dirty = text !== (noteStage === "first" ? (photo.note_text ?? "") : (photo.second_note_text ?? ""));
   const charCount = [...text.trim()].length;
   const overLimit = charCount > 500;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -184,7 +187,7 @@ function ImmersivePhotoView({
         if (!active) return;
         const p = photoSchema.parse(data);
         setPhoto(p);
-        setText(p.note_text ?? "");
+        setText(p.first_note_at ? (p.second_note_text ?? "") : (p.note_text ?? ""));
         setVersion(p.version);
         setUrl(asset.url);
         setLoadError("");
@@ -209,9 +212,13 @@ function ImmersivePhotoView({
     try {
       if (isDemoMode()) {
         await new Promise((r) => setTimeout(r, 500));
-        const result = { ...photo, note_text: text.trim(), version: version + 1, preserved_at: photo.preserved_at ?? new Date().toISOString() };
+        const now = new Date().toISOString();
+        const isFirst = !photo.first_note_at;
+        const result: Photo = isFirst
+          ? { ...photo, note_text: text.trim(), first_note_at: now, version: version + 1 }
+          : { ...photo, second_note_text: text.trim(), second_note_at: now, preserved_at: photo.preserved_at ?? now, version: version + 1 };
         setPhoto(result);
-        setText(result.note_text ?? "");
+        setText(isFirst ? (result.note_text ?? "") : (result.second_note_text ?? ""));
         setVersion(result.version);
         setSaved(true);
         setSaveMsg("데모 화면에서는 실제로 저장되지 않아요.");
@@ -221,13 +228,14 @@ function ImmersivePhotoView({
       const result = photoSchema.parse(await requestApi(`/api/photos/${photo.id}/note`, {
         method: "PUT",
         body: JSON.stringify({
+          note_stage: noteStage,
           note_text: text,
           expected_version: version,
           request_id: crypto.randomUUID(),
         }),
       }));
       setPhoto(result);
-      setText(result.note_text ?? "");
+      setText(noteStage === "first" ? (result.note_text ?? "") : (result.second_note_text ?? ""));
       setVersion(result.version);
       setConflict(null);
       setSaved(true);

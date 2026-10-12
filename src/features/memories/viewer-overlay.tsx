@@ -98,6 +98,7 @@ export function ViewerOverlay({
       const result = photoSchema.parse(await requestApi(`/api/photos/${effectivePhoto.id}/note`, {
         method: "PUT",
         body: JSON.stringify({
+          note_stage: "first",
           note_text: editText,
           expected_version: editVersion,
           request_id: crypto.randomUUID(),
