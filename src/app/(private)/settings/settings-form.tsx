@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { requestApi } from "@/lib/api";
 import { isDemoMode } from "@/lib/demo";
+import { createBulkArchive, fetchArchiveItem, saveArchive } from "@/features/export/archive";
 
 export function SettingsForm() {
   const router = useRouter();
@@ -58,25 +59,30 @@ export function SettingsForm() {
     router.replace("/login"); router.refresh();
   }
 
+  async function deleteAccount() {
+    if (isDemoMode()) { setMessage("데모 모드에서는 삭제할 수 없어요."); return; }
+    if (!window.confirm("계정과 모든 사진·메모가 삭제됩니다. 필요한 사진을 먼저 가져가세요. 삭제할까요?")) return;
+    setBusy(true);
+    try {
+      const job = await requestApi<{ job_id: string; progress_token: string; expires_at: string }>("/api/me", { method: "DELETE" });
+      sessionStorage.setItem("deletion-progress", JSON.stringify(job));
+      router.replace("/settings/deletion"); router.refresh();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "다시 시도해주세요."); }
+    finally { setBusy(false); }
+  }
+
   async function exportAll() {
+    if (exporting) return;
     if (isDemoMode()) { setMessage("데모 모드에서는 다운로드할 수 없어요."); return; }
     setExporting(true);
     setMessage("");
     try {
-      const res = await fetch("/api/me/export/zip", { cache: "no-store" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        throw new Error(body?.error?.message ?? "잠시 후 다시 시도해주세요.");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `memories-${new Date().toISOString().slice(0, 10)}.zip`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      const { photos } = await requestApi<{ photos: { id: string }[] }>("/api/photos?scope=preserved&limit=20");
+      if (!photos.length) throw new Error("보관된 사진이 아직 없어요.");
+      const items = [];
+      // shortcut: MVP는 계정당 최대 20장, 한도를 늘리면 ZIP 스트리밍으로 변경합니다.
+      for (const photo of photos) items.push(await fetchArchiveItem(photo.id));
+      saveArchive(createBulkArchive(items), `memories-${new Date().toISOString().slice(0, 10)}.zip`);
       showToast("다운로드를 시작했어요.");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "다운로드에 실패했어요.");
@@ -143,7 +149,7 @@ export function SettingsForm() {
 
       {/* Analytics consent */}
       <div className="settings-section">
-        <div className="settings-row" onClick={() => loaded && !busy && setConsent((v) => !v)}>
+        <div className="settings-row">
           <div className="settings-row-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
@@ -155,13 +161,16 @@ export function SettingsForm() {
             <p>사진·메모·파일명은 포함하지 않아요.</p>
           </div>
           <div className="settings-row-right">
-            <div
+            <button
               className={`settings-toggle${consent ? " on" : ""}`}
               role="switch"
+              aria-label="분석 데이터 사용 동의"
               aria-checked={consent}
+              disabled={!loaded || busy}
+              onClick={() => setConsent((v) => !v)}
             >
               <div className="settings-toggle-thumb" />
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -235,6 +244,8 @@ export function SettingsForm() {
           </div>
         </div>
       </div>
+
+      <button className="danger" disabled={busy} onClick={() => void deleteAccount()}>계정과 전체 데이터 삭제</button>
 
       {message && (
         <p

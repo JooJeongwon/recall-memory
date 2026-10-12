@@ -3,9 +3,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { z } from "zod";
 import { motion } from "motion/react";
-import { requestApi, RequestError } from "@/lib/api";
+import { requestApi } from "@/lib/api";
 import { photoSchema, type Photo } from "@/lib/validation/contracts";
 import { demoImages, demoPhotos, isDemoMode } from "@/lib/demo";
+
+import { NoteEditor } from "./note-editor";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -18,14 +20,17 @@ export function Revisit() {
 
   useEffect(() => {
     if (isDemoMode()) return;
+    let active = true;
     requestApi<{ photos: unknown[] }>("/api/photos?limit=20")
       .then((data) => {
+        if (!active) return;
         const list = z.array(photoSchema).parse(data.photos);
         setPhotos(list);
         setIndex(Math.max(0, list.findIndex((p) => !p.first_viewed_at)));
         setMessage(list.length ? "" : "선택한 사진이 아직 없어요.");
       })
-      .catch((e: Error) => setMessage(e.message));
+      .catch((e: Error) => { if (active) setMessage(e.message); });
+    return () => { active = false; };
   }, [retry]);
 
   const handlePrev = useCallback(() => {
@@ -40,9 +45,10 @@ export function Revisit() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") handlePrev();
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") handleNext(photos.length);
-      if (e.key === "Escape") window.history.back();
+      if (e.target instanceof HTMLElement && e.target.matches("textarea,input")) return;
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") document.querySelector<HTMLButtonElement>(".revisit-side-btn.prev")?.click();
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") document.querySelector<HTMLButtonElement>(".revisit-side-btn.next")?.click();
+      if (e.key === "Escape") document.querySelector<HTMLButtonElement>(".revisit-nav-btn")?.click();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -56,7 +62,6 @@ export function Revisit() {
         <p role="status" style={{ color: "rgba(255,255,255,.5)", fontSize: ".9rem", marginBottom: 24 }}>
           {message}
         </p>
-        {message !== "사진을 불러오는 중…" && (
           <div style={{ display: "flex", gap: 10 }}>
             <Link className="button coral" href="/start" style={{ fontSize: ".88rem", height: 44, minHeight: 44 }}>
               사진 선택하기
@@ -66,7 +71,6 @@ export function Revisit() {
               새로고침
             </button>
           </div>
-        )}
       </div>
     );
   }
@@ -77,7 +81,7 @@ export function Revisit() {
       <div className="revisit-topbar">
         <button
           className="revisit-nav-btn"
-          aria-label="뒤로"
+          data-leave aria-label="뒤로"
           onClick={() => window.history.back()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -91,7 +95,7 @@ export function Revisit() {
 
         <button
           className="revisit-nav-btn"
-          aria-label="닫기"
+          data-leave aria-label="닫기"
           onClick={() => window.history.back()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -143,20 +147,6 @@ function ImmersivePhotoView({
   const [photo, setPhoto] = useState(initialPhoto);
   const [url, setUrl] = useState("");
   const [loadError, setLoadError] = useState("");
-  const noteStage: "first" | "second" = photo.first_note_at ? "second" : "first";
-  const [text, setText] = useState(
-    initialPhoto.first_note_at ? (initialPhoto.second_note_text ?? "") : (initialPhoto.note_text ?? "")
-  );
-  const [version, setVersion] = useState(initialPhoto.version);
-  const [conflict, setConflict] = useState<Photo | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saveMsg, setSaveMsg] = useState("");
-  const dirty = text !== (noteStage === "first" ? (photo.note_text ?? "") : (photo.second_note_text ?? ""));
-  const charCount = [...text.trim()].length;
-  const overLimit = charCount > 500;
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   /* Touch swipe */
   const touchStartX = useRef<number | null>(null);
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -167,9 +157,9 @@ function ImmersivePhotoView({
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
     if (Math.abs(dx) < 40) return;
-    if (dx < 0 && canNext) onNext();
-    if (dx > 0 && canPrev) onPrev();
-  }, [canNext, canPrev, onNext, onPrev]);
+    if (dx < 0 && canNext) document.querySelector<HTMLButtonElement>(".revisit-side-btn.next")?.click();
+    if (dx > 0 && canPrev) document.querySelector<HTMLButtonElement>(".revisit-side-btn.prev")?.click();
+  }, [canNext, canPrev]);
 
   useEffect(() => {
     let active = true;
@@ -180,16 +170,11 @@ function ImmersivePhotoView({
         return;
       }
       try {
-        const [data, asset] = await Promise.all([
-          requestApi(`/api/photos/${initialPhoto.id}`),
-          requestApi<{ url: string }>(`/api/photos/${initialPhoto.id}/asset?kind=thumbnail`),
-        ]);
+        const data = await requestApi(`/api/photos/${initialPhoto.id}`);
         if (!active) return;
         const p = photoSchema.parse(data);
         setPhoto(p);
-        setText(p.first_note_at ? (p.second_note_text ?? "") : (p.note_text ?? ""));
-        setVersion(p.version);
-        setUrl(asset.url);
+        setUrl(`/api/photos/${initialPhoto.id}/asset?kind=thumbnail`);
         setLoadError("");
       } catch (e) {
         if (active) setLoadError(e instanceof Error ? e.message : "다시 시도해주세요.");
@@ -198,57 +183,6 @@ function ImmersivePhotoView({
     void load();
     return () => { active = false; };
   }, [initialPhoto.id]);
-
-  useEffect(() => {
-    function leave(e: BeforeUnloadEvent) {
-      if (dirty) { e.preventDefault(); e.returnValue = ""; }
-    }
-    window.addEventListener("beforeunload", leave);
-    return () => window.removeEventListener("beforeunload", leave);
-  }, [dirty]);
-
-  async function save() {
-    setBusy(true); setSaveMsg(""); setSaved(false);
-    try {
-      if (isDemoMode()) {
-        await new Promise((r) => setTimeout(r, 500));
-        const now = new Date().toISOString();
-        const isFirst = !photo.first_note_at;
-        const result: Photo = isFirst
-          ? { ...photo, note_text: text.trim(), first_note_at: now, version: version + 1 }
-          : { ...photo, second_note_text: text.trim(), second_note_at: now, preserved_at: photo.preserved_at ?? now, version: version + 1 };
-        setPhoto(result);
-        setText(isFirst ? (result.note_text ?? "") : (result.second_note_text ?? ""));
-        setVersion(result.version);
-        setSaved(true);
-        setSaveMsg("데모 화면에서는 실제로 저장되지 않아요.");
-        onPhotoUpdated(result);
-        return;
-      }
-      const result = photoSchema.parse(await requestApi(`/api/photos/${photo.id}/note`, {
-        method: "PUT",
-        body: JSON.stringify({
-          note_stage: noteStage,
-          note_text: text,
-          expected_version: version,
-          request_id: crypto.randomUUID(),
-        }),
-      }));
-      setPhoto(result);
-      setText(noteStage === "first" ? (result.note_text ?? "") : (result.second_note_text ?? ""));
-      setVersion(result.version);
-      setConflict(null);
-      setSaved(true);
-      setSaveMsg("기억으로 남겼어요.");
-      onPhotoUpdated(result);
-    } catch (error) {
-      if (error instanceof RequestError && error.code === "VERSION_CONFLICT") {
-        const details = error.details as { current: unknown };
-        setConflict(photoSchema.parse(details.current));
-      }
-      setSaveMsg(error instanceof Error ? error.message : "저장하지 못했어요. 다시 시도해주세요.");
-    } finally { setBusy(false); }
-  }
 
   const slideX = direction * 56;
 
@@ -293,12 +227,12 @@ function ImmersivePhotoView({
         )}
 
         {/* Side navigation */}
-        <button className="revisit-side-btn prev" disabled={!canPrev} aria-label="이전 사진" onClick={onPrev}>
+        <button className="revisit-side-btn prev" disabled={!canPrev} data-leave aria-label="이전 사진" onClick={onPrev}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
-        <button className="revisit-side-btn next" disabled={!canNext} aria-label="다음 사진" onClick={onNext}>
+        <button className="revisit-side-btn next" disabled={!canNext} data-leave aria-label="다음 사진" onClick={onNext}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M9 18l6-6-6-6"/>
           </svg>
@@ -312,64 +246,7 @@ function ImmersivePhotoView({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.38, delay: 0.08, ease }}
       >
-        <p className="revisit-note-question">이 순간을 기억하고 싶은 이유는?</p>
-
-        {conflict && (
-          <div className="revisit-conflict">
-            <strong>다른 기기에서 저장된 내용이 있어요</strong>
-            <p style={{ color: "rgba(255,255,255,.5)", fontSize: ".84rem", margin: "4px 0 8px" }}>
-              {conflict.note_text || "(빈 메모)"}
-            </p>
-            <button
-              style={{
-                background: "transparent", border: "1px solid rgba(255,255,255,.2)",
-                color: "rgba(255,255,255,.65)", fontSize: ".78rem",
-                padding: "5px 12px", height: 30, minHeight: 30, borderRadius: "var(--r-pill)"
-              }}
-              disabled={busy}
-              onClick={() => {
-                setVersion(conflict.version);
-                setConflict(null);
-                setSaveMsg("작성 중인 내용을 유지했어요. 저장해주세요.");
-              }}
-            >
-              내 입력으로 덮어쓰기
-            </button>
-          </div>
-        )}
-
-        <textarea
-          ref={textareaRef}
-          className="revisit-note-textarea"
-          value={text}
-          onChange={(e) => { setText(e.target.value); setSaved(false); setSaveMsg(""); }}
-          disabled={busy}
-          placeholder="한 줄이어도 좋아요."
-          aria-label="기억 메모"
-          rows={3}
-        />
-
-        <div className="revisit-note-meta">
-          <span className={`revisit-note-count${overLimit ? " warn" : ""}`}>
-            {charCount} / 500
-          </span>
-        </div>
-
-        <motion.button
-          className="revisit-save-btn"
-          onClick={() => void save()}
-          disabled={busy || !!conflict || overLimit || (!photo.preserved_at && !text.trim())}
-          whileTap={{ scale: 0.97 }}
-          transition={{ duration: 0.15 }}
-        >
-          {busy ? "저장 중…" : saved ? "✓ 기억으로 남겼어요" : "기억으로 남기기"}
-        </motion.button>
-
-        {saveMsg && (
-          <p className={`revisit-save-msg${!saved && saveMsg.includes("못") ? " error" : ""}`}>
-            {saveMsg}
-          </p>
-        )}
+        {isDemoMode() ? <p>데모 화면에서는 실제로 저장되지 않아요.</p> : <NoteEditor photo={photo} onSaved={(updated) => { setPhoto(updated); onPhotoUpdated(updated); }} />}
 
       </motion.div>
     </>

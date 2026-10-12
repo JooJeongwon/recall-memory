@@ -26,13 +26,16 @@ export function MemoryList() {
 
   useEffect(() => {
     if (isDemoMode()) return;
+    let active = true;
     requestApi<{ photos: unknown[] }>("/api/photos?scope=preserved&limit=20")
       .then((data) => {
+        if (!active) return;
         const list = z.array(photoSchema).parse(data.photos);
         setPhotos(list);
         setMessage(list.length ? "" : "empty");
       })
-      .catch((e: Error) => setMessage(e.message));
+      .catch((e: Error) => { if (active) setMessage(e.message); });
+    return () => { active = false; };
   }, [retry]);
 
   const openViewer = useCallback((idx: number) => setViewerIndex(idx), []);
@@ -106,7 +109,7 @@ export function MemoryList() {
         </motion.div>
       )}
 
-      {photos.length > 0 && (
+      {!isDemoMode() && (
         <div style={{ textAlign: "center", paddingTop: 16 }}>
           <button
             className="ghost"
@@ -132,16 +135,9 @@ export function MemoryList() {
 }
 
 function GalleryTile({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
-  const [url, setUrl] = useState(isDemoMode() ? (demoImages[photo.id] ?? demoImages[Object.keys(demoImages)[0]]) : "");
+  const [retry, setRetry] = useState(0);
+  const url = isDemoMode() ? demoImages[photo.id] : `/api/photos/${photo.id}/asset?kind=thumbnail&retry=${retry}`;
 
-  useEffect(() => {
-    if (isDemoMode()) return;
-    let active = true;
-    requestApi<{ url: string }>(`/api/photos/${photo.id}/asset`)
-      .then((data) => { if (active) setUrl(data.url); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, [photo.id]);
 
   return (
     <motion.div
@@ -158,7 +154,7 @@ function GalleryTile({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" loading="lazy" />
+        <img src={url} alt="보관한 사진" loading="lazy" onError={() => { if (!retry) setRetry(1); }} />
       ) : (
         <div className="gallery-tile-skeleton" />
       )}

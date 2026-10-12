@@ -1,33 +1,25 @@
 "use client";
 import { useState } from "react";
-import { NETWORK_ERROR_MESSAGE, RequestError, requestApi } from "@/lib/api";
-import { createArchive } from "./archive";
+import { requestApi } from "@/lib/api";
+import { createArchive, fetchArchiveItem, saveArchive } from "./archive";
 
-export function ExportButton({ id }: { id: string }) {
+import { isDemoMode } from "@/lib/demo";
+
+export function ExportButton({ id, compact = false }: { id: string; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   async function download() {
+    if (isDemoMode()) { setMessage("데모 모드에서는 다운로드할 수 없어요."); return; }
     setBusy(true); setMessage("");
     try {
-      const data = await requestApi<{ original_filename: string; memory: unknown }>(`/api/photos/${id}/export`);
-      let bytes: Uint8Array;
-      try {
-        const response = await fetch(`/api/photos/${id}/asset?kind=original`, { cache: "no-store", referrerPolicy: "no-referrer" });
-        if (!response.ok) throw new Error("사진을 가져오지 못했어요. 다시 시도해주세요.");
-        bytes = new Uint8Array(await response.arrayBuffer());
-      } catch (error) {
-        if (error instanceof TypeError) throw new RequestError(NETWORK_ERROR_MESSAGE, "NETWORK_ERROR");
-        throw error;
-      }
-      const archive = createArchive(data.original_filename, bytes, data.memory);
-      const url = URL.createObjectURL(new Blob([new Uint8Array(archive)], { type: "application/zip" }));
-      const link = document.createElement("a"); link.href = url; link.download = `memory-${id}.zip`;
-      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const data = await fetchArchiveItem(id);
+      const archive = createArchive(data.originalName, data.bytes, data.memory);
+      saveArchive(archive, `memory-${id}.zip`);
       setMessage("사진과 두 메모가 담긴 ZIP을 만들었어요. 다운로드 파일을 확인해주세요.");
       void requestApi("/api/events", { method: "POST", body: JSON.stringify({ name: "export_generated", photo_id: id,
         client_event_id: crypto.randomUUID(), visit_context: "unknown" }) }).catch(() => {});
     } catch (e) { setMessage(e instanceof Error ? e.message : "다시 시도해주세요."); }
     finally { setBusy(false); }
   }
-  return <div><button disabled={busy} onClick={() => void download()}>{busy ? "파일 준비 중…" : "사진과 메모 가져가기"}</button><p role="status">{message}</p></div>;
+  return <div><button className={compact ? "photo-detail-action" : "ghost"} disabled={busy} onClick={() => void download()}>{busy ? "파일 준비 중…" : "사진과 메모 가져가기"}</button><p role="status">{message}</p></div>;
 }

@@ -365,3 +365,11 @@ P1 단계 완료와 MVP 최종 완료는 체크하지 않는다. 제한 검증 �
 - 구현: `20261012024626_note_retention_checkpoints.sql`, DB `save_note`·`sweep_incomplete`·삭제 큐, 두 메모 UI·보관함·ZIP v2를 갱신했다. 파일 삭제는 기존 Storage API와 재시도 worker를 사용한다.
 - 적용: `20261012024626_note_retention_checkpoints.sql`을 공유 원격 DB에 적용하고 Worker를 [운영 URL](https://recall-memory.jwjoo0512.workers.dev)에 배포했다. `GET /`은 200을 반환했고, 원격 migration 이력에 두 migration이 등록됐다. migration 뒤 10분 유지관리 Cron의 성공 실행을 확인했다. 확인 당시 기한 초과·삭제 중 사진은 없었다.
 - 미검증: 만료 사진의 실제 Storage 삭제·재시도, 두 기한 경계, UI·ZIP, 기존 DB upgrade를 검증하지 않았다. lint·typecheck·unit·integration·E2E는 실행하지 않았다. 실제 48시간 재접속과 실기기 확인도 남아 있다.
+
+## 32. 프런트 브랜치 통합 — 2026년 10월 12일
+
+- 대상: `feat/frontend-seeun`의 `78a3e1b`와 `integration/frontend-ui`의 `a4099cd`. 후자는 이미 `main`에 반영되어 있어 그 API 수정과 최신 Worker 코드를 기준으로 나머지 프런트 변경을 병합했다.
+- 반영: 소개·로그인·선택·상세 화면, 브랜딩 이미지, 오프닝·화면 애니메이션, 보관함 뷰어, 메모 수정 화면, 설정의 일괄 ZIP. Motion 14.1.0과 lockfile을 함께 반영했다.
+- 충돌 해결: Worker 실행·인증·Origin 검사·요청 로그·사진별 기한·Storage 세션 업로드와 바이너리 스트리밍 계약을 유지했다. 다시 보기·보관함·수정 화면은 기존 두 단계 메모 편집기를 공유하고, 미저장 입력 이동 안내와 버전 충돌 처리를 유지한다. 설정의 계정 삭제도 기존 API·진행 화면으로 이어진다. 서버 ZIP 대신 기존 API로 원본과 두 메모를 받아 브라우저에서 개별·일괄 ZIP을 만든다.
+- 검증: Node 22.18.0에서 lint(경고 없음), typecheck, 단위 테스트 25개, 소개·오프닝 모바일 Chromium E2E 13개, Worker build 통과. ZIP 단위 테스트는 원본 바이트·UTF-8 두 메모·사진별 폴더와 원본 접근 실패·연결 단절 거절을 확인했다. 모션 감소 설정에서 hydration 오류가 없고 이미지 로딩 실패에도 오프닝이 종료되는 것을 확인했다. 변경된 화면에 맞춰 기존 사진 흐름 E2E의 선택자와 재시도 검증도 갱신했다.
+- 제한: 운영 Supabase에 fixture를 만들지 않았다. 통합 DB·인증된 사진 흐름 E2E·일괄 다운로드 실기기 메모리 검증은 이번에 실행하지 않았다. 실제 Worker OAuth·48시간 재접속·복구 연습과 운영 배포 결과 확인은 남아 있다. MVP 완료나 보존 정책 전체 검증으로 표시하지 않는다.

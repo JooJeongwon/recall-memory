@@ -80,6 +80,8 @@ npm run typecheck
 
 ## 검증
 
+2026-10-12 `feat/frontend-seeun`과 `integration/frontend-ui`를 통합했다. 소개·로그인·사진 선택·사진 상세 디자인과 오프닝 애니메이션을 반영하고, 다시 보기·보관함·수정 화면은 기존 두 단계 메모 편집기를 사용한다. 사진 조회는 같은 출처의 인증된 바이너리 API, 업로드는 사용자 세션의 Storage 업로드를 유지한다. 설정의 일괄 ZIP은 기존 사진별 내보내기 API로 원본과 두 메모를 받아 브라우저에서 생성한다. 계정 삭제도 설정에서 계속 요청할 수 있다. 이번 검증과 남은 제한은 `ROADMAP.md`의 프런트 브랜치 통합 기록을 참고한다.
+
 ```sh
 npm run lint
 npm run typecheck
