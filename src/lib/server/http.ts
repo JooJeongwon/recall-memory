@@ -18,9 +18,12 @@ export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 export function assertOrigin(request: Request) {
-  const configured = process.env.APP_BASE_URL;
+  const configured = process.env.APP_BASE_URL?.replace(/^﻿/, "").trim();
   if (!configured) throw new ApiError(503, "NOT_CONFIGURED");
-  if (request.headers.get("origin") !== new URL(configured).origin)
+  let expected: string;
+  try { expected = new URL(configured).origin; }
+  catch { throw new ApiError(503, "NOT_CONFIGURED"); }
+  if (request.headers.get("origin") !== expected)
     throw new ApiError(403, "INVALID_ORIGIN");
 }
 export async function input<T>(request: Request, schema: ZodType<T>): Promise<T> {
