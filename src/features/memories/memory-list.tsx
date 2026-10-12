@@ -37,6 +37,10 @@ export function MemoryList() {
 
   const openViewer = useCallback((idx: number) => setViewerIndex(idx), []);
   const closeViewer = useCallback(() => setViewerIndex(null), []);
+  const handleDelete = useCallback((deletedId: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== deletedId));
+    setViewerIndex(null);
+  }, []);
 
   if (message === "empty") {
     return (
@@ -115,6 +119,7 @@ export function MemoryList() {
           photos={photos}
           initialIndex={viewerIndex}
           onClose={closeViewer}
+          onDelete={handleDelete}
         />
       )}
     </>

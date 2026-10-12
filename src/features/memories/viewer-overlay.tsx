@@ -8,10 +8,12 @@ export function ViewerOverlay({
   photos,
   initialIndex,
   onClose,
+  onDelete,
 }: {
   photos: Photo[];
   initialIndex: number;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }) {
   const [index, setIndex] = useState(initialIndex);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -64,6 +66,19 @@ export function ViewerOverlay({
     if (dx < 0 && index < photos.length - 1) setIndex((i) => i + 1);
     if (dx > 0 && index > 0) setIndex((i) => i - 1);
   }, [index, photos.length]);
+
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!current) return;
+    if (!window.confirm("사진과 메모가 함께 삭제됩니다. 필요하면 먼저 가져가세요. 삭제할까요?")) return;
+    if (isDemoMode()) return;
+    setDeleting(true);
+    try {
+      await requestApi(`/api/photos/${current.id}`, { method: "DELETE" });
+      onDelete?.(current.id);
+    } catch { setDeleting(false); }
+  }
 
   const dateLabel = current?.preserved_at
     ? new Date(current.preserved_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
@@ -151,6 +166,25 @@ export function ViewerOverlay({
                 </svg>
                 가져가기
               </a>
+            )}
+            {!isDemoMode() && (
+              <button
+                disabled={deleting}
+                onClick={() => void handleDelete()}
+                style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  height: 38, borderRadius: 10, border: "none", cursor: deleting ? "not-allowed" : "pointer",
+                  background: "rgba(220,53,69,.15)", color: "rgba(220,53,69,.9)",
+                  fontSize: ".8rem", fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                </svg>
+                {deleting ? "삭제 중…" : "삭제"}
+              </button>
             )}
           </div>
         </div>

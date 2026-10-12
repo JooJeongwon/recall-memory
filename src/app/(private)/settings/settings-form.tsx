@@ -66,20 +66,6 @@ export function SettingsForm() {
     a.remove();
   }
 
-  async function deleteAccount() {
-    if (!window.confirm("계정과 모든 사진·메모가 삭제됩니다. 필요한 사진을 먼저 가져가세요. 삭제할까요?")) return;
-    if (isDemoMode()) { setMessage("데모 모드에서는 삭제할 수 없어요."); return; }
-    setBusy(true);
-    try {
-      const job = await requestApi<{ job_id: string; progress_token: string; expires_at: string }>(
-        "/api/me", { method: "DELETE" }
-      );
-      sessionStorage.setItem("deletion-progress", JSON.stringify(job));
-      router.replace("/settings/deletion"); router.refresh();
-    } catch (e) { setMessage(e instanceof Error ? e.message : "다시 시도해주세요."); }
-    finally { setBusy(false); }
-  }
-
   return (
     <div className="settings-root">
       {/* Toast notification */}
@@ -221,34 +207,6 @@ export function SettingsForm() {
           </div>
           <div className="settings-row-text">
             <strong>로그아웃</strong>
-          </div>
-          <div className="settings-row-right">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* Danger zone */}
-      <div className="settings-section">
-        <div
-          className="settings-row"
-          role="button"
-          tabIndex={0}
-          onClick={() => void deleteAccount()}
-          onKeyDown={(e) => e.key === "Enter" && void deleteAccount()}
-        >
-          <div className="settings-row-icon danger">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" y1="9" x2="9" y2="15"/>
-              <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-          </div>
-          <div className="settings-row-text">
-            <strong className="danger">계정과 전체 데이터 삭제</strong>
-            <p>모든 사진·메모가 삭제돼요. 먼저 가져가세요.</p>
           </div>
           <div className="settings-row-right">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
