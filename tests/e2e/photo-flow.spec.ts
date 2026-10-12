@@ -175,7 +175,7 @@ test("합성 사진 보관과 실험 만료 후 ZIP 반출을 확인한다", asy
     expect(consentedEvents.data?.some(({ name }) => name === "note_saved")).toBe(true);
     const concurrentSave = await admin.rpc("save_note", { p_user_id: userId, p_photo_id: currentPhoto.data!.id,
       p_note_text: "다른 곳에서 먼저 저장한 메모", p_expected_version: currentPhoto.data!.version,
-      p_request_id: crypto.randomUUID() });
+      p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(concurrentSave.error).toBeNull();
     await page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?").fill("작성 중인 메모는 유지되어야 해요.");
     await page.getByRole("button", { name: "메모와 함께 남기기" }).click();

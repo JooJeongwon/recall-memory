@@ -218,12 +218,14 @@ function ImmersivePhotoView({
         onPhotoUpdated(result);
         return;
       }
+      const noteStage = photo.preserved_at ? "second" : "first";
       const result = photoSchema.parse(await requestApi(`/api/photos/${photo.id}/note`, {
         method: "PUT",
         body: JSON.stringify({
           note_text: text,
           expected_version: version,
           request_id: crypto.randomUUID(),
+          note_stage: noteStage,
         }),
       }));
       setPhoto(result);

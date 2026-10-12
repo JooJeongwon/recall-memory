@@ -440,6 +440,7 @@ export type Database = {
       save_note: {
         Args: {
           p_expected_version: number
+          p_note_stage: string
           p_note_text: string
           p_photo_id: string
           p_request_id: string

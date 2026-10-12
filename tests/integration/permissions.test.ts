@@ -109,17 +109,17 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
       .toBe(startedTrial.data!.duration_hours * 60 * 60 * 1_000);
 
     const emptyFirstNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-      p_note_text: " \n ", p_expected_version: 1, p_request_id: crypto.randomUUID() });
+      p_note_text: " \n ", p_expected_version: 1, p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(emptyFirstNote.error?.message).toBe("INVALID_INPUT");
     const maxLengthNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-      p_note_text: "📷".repeat(500), p_expected_version: 1, p_request_id: crypto.randomUUID() });
+      p_note_text: "📷".repeat(500), p_expected_version: 1, p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(maxLengthNote.error).toBeNull();
     expect(maxLengthNote.data).toMatchObject({ note_text: "📷".repeat(500), version: 2 });
     const overLengthNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-      p_note_text: "📷".repeat(501), p_expected_version: 2, p_request_id: crypto.randomUUID() });
+      p_note_text: "📷".repeat(501), p_expected_version: 2, p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(overLengthNote.error?.message).toBe("INVALID_INPUT");
     const saved = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-      p_note_text: "합성 사진 보관 확인", p_expected_version: 2, p_request_id: crypto.randomUUID() });
+      p_note_text: "합성 사진 보관 확인", p_expected_version: 2, p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(saved.error).toBeNull();
     const ownPhoto = await sessions[0].from("photos").select("note_text,preserved_at").eq("id", photoId);
     expect(ownPhoto.error).toBeNull();
@@ -207,7 +207,7 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     expect(lateClaim.error).toBeNull();
     expect(lateClaim.data).toMatchObject({ error: "TRIAL_ENDED" });
     const lateFirstNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: lateNotePhotoId,
-      p_note_text: "기간 종료 후 처음 보관한 합성 사진", p_expected_version: 1, p_request_id: crypto.randomUUID() });
+      p_note_text: "기간 종료 후 처음 보관한 합성 사진", p_expected_version: 1, p_request_id: crypto.randomUUID(), p_note_stage: "first" });
     expect(lateFirstNote.error).toBeNull();
     expect(lateFirstNote.data).toMatchObject({ note_text: "기간 종료 후 처음 보관한 합성 사진" });
     const lateFirstNoteAt = Date.parse((lateFirstNote.data as { first_note_at: string }).first_note_at);
@@ -223,7 +223,7 @@ it("격리된 개발 Supabase에서 권한과 합성 사진 보관 흐름을 확
     if (!currentVersion) throw new Error("Photo version missing after preservation");
     const savedAfterExpiry = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
       p_note_text: "기간이 끝나도 기존 사진은 이용할 수 있어요", p_expected_version: currentVersion,
-      p_request_id: crypto.randomUUID() });
+      p_request_id: crypto.randomUUID(), p_note_stage: "second" });
     expect(savedAfterExpiry.error).toBeNull();
     const stillPreserved = await sessions[0].from("photos").select("lifecycle,note_text,preserved_at")
       .eq("id", photoId).single();

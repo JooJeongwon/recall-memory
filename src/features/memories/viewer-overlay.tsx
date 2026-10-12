@@ -101,6 +101,7 @@ export function ViewerOverlay({
           note_text: editText,
           expected_version: editVersion,
           request_id: crypto.randomUUID(),
+          note_stage: "first",
         }),
       }));
       setLocalPhoto(result);

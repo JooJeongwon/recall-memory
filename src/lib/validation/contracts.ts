@@ -7,6 +7,7 @@ export const noteInput = z.object({
     .refine((value) => [...value].length <= policy.noteLength, "메모는 500자까지 남길 수 있어요."),
   expected_version: z.number().int().positive(),
   request_id: uuid,
+  note_stage: z.enum(["first", "second"]),
 }).strict();
 export const uploadInput = z.object({
   files: z.array(z.object({
