@@ -263,33 +263,6 @@ export function SettingsForm() {
           className="settings-row"
           role="button"
           tabIndex={0}
-          onClick={() => {
-            if (!window.confirm("사진과 메모가 삭제됩니다. 계속할까요?")) return;
-            setMessage("사진 삭제는 각 사진 상세에서 가능해요.");
-          }}
-          onKeyDown={(e) => e.key === "Enter" && void 0}
-        >
-          <div className="settings-row-icon danger">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-              <path d="M10 11v6M14 11v6"/>
-            </svg>
-          </div>
-          <div className="settings-row-text">
-            <strong className="danger">사진 삭제</strong>
-          </div>
-          <div className="settings-row-right">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
-        </div>
-
-        <div
-          className="settings-row"
-          role="button"
-          tabIndex={0}
           onClick={() => void deleteAccount()}
           onKeyDown={(e) => e.key === "Enter" && void deleteAccount()}
         >
