@@ -6,4 +6,4 @@ export const runtime = "nodejs";
 export const PATCH = endpoint(async (request) => {
   const preferences = await input(request, preferencesInput);
 return json(await rpc("set_preferences", { p_consent: preferences.analytics_consent, p_timezone: preferences.timezone }));
-});
+}, "/api/me/preferences");

@@ -13,5 +13,5 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       first_note_at: photo.first_note_at, second_note_at: photo.second_note_at,
       uploaded_at: photo.ready_at, preserved_at: photo.preserved_at, exported_at: new Date().toISOString(),
     } });
-  })(request);
+  }, "/api/photos/[id]/export")(request);
 }

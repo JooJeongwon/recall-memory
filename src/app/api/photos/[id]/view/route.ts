@@ -8,5 +8,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   return endpoint(async () => {
     await rpc("mark_viewed", { p_photo_id: uuid.parse(id) });
 return new Response(null, { status: 204, headers: { "Cache-Control": "private, no-store" } });
-  })(request);
+  }, "/api/photos/[id]/view")(request);
 }

@@ -15,5 +15,5 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     } });
-  })(request);
+  }, "/api/photos/[id]/asset")(request);
 }

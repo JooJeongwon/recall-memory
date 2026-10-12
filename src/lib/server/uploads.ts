@@ -32,7 +32,7 @@ export async function completeUpload(id: string) {
   if (downloaded.error || !downloaded.data) {
     // 파일 미도착/통신 오류는 같은 예약으로 재시도할 수 있게 lease를 반환합니다.
     await admin.rpc("release_upload", { p_user_id: user.id, p_photo_id: id, p_token: claim.token });
-    throw new ApiError(503, "TEMPORARY_FAILURE");
+    throw new ApiError(503, "TEMPORARY_FAILURE", undefined, { stage: "upload.download", cause: downloaded.error });
   }
   try {
     if (downloaded.data.size !== photo.byte_size) throw new ApiError(415, "UNSUPPORTED_MEDIA");
@@ -40,7 +40,7 @@ export async function completeUpload(id: string) {
     const image = await validateImage(bytes, photo.mime_type);
     const saved = await admin.storage.from(policy.bucket).upload(claim.photo.thumbnail_key, image.thumbnail,
       { contentType: "image/webp", upsert: true, cacheControl: "0" });
-    if (saved.error) throw new ApiError(503, "TEMPORARY_FAILURE");
+    if (saved.error) throw new ApiError(503, "TEMPORARY_FAILURE", undefined, { stage: "upload.thumbnail", cause: saved.error });
     const data = await rpc("complete_upload", { p_photo_id: id, p_token: claim.token,
       p_width: image.width, p_height: image.height, p_bytes: bytes.length, p_mime: image.mime }, auth);
     return { photo: photoSchema.parse(data) };

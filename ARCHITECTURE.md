@@ -412,7 +412,7 @@ Cron은 10분마다 유지관리 함수를 호출하는 기본안이다. 호출 
 
 위 제한 설정의 이름은 논리적 설정 이름이다. 이번 초기 구현은 런타임 환경변수로 제한을 조절하지 않고 `src/lib/config.ts`와 서버 전용 `public.app_policy()`에 기본값을 고정한다. `.env.example`에는 앱 프로젝트 ID·URL·키·APP_BASE_URL·유지관리 비밀·별도 통합 검증 연결 이름을 둔다. 사용자의 지시에 따라 현재 개발과 MVP 운영은 같은 Supabase 프로젝트를 사용한다. `.env.local`의 `SUPABASE_ENVIRONMENT=production`은 fixture 기반 통합/E2E 테스트를 거부한다. 검증은 앱 DB와 분리한 Supabase 프로젝트에서만 실행한다. 통합 검증에서 두 정책이 같은지 확인하며 값 변경 시 새 migration과 TypeScript 설정을 함께 수정한다. 제한값을 요청 본문으로 받아 DB에 전달하지 않는다. Auth 콜백은 허용 주소로만 이동한다.
 
-앱이 직접 관리하는 운영 로그에는 request ID, API 종류, 처리 시간, 오류 코드, 작업 상태만 남긴다. 메모·파일명·서명 URL·OTP·token은 제외한다. 호스팅·Auth·Storage 제공자의 managed logs는 별도 보존·접근 정책을 검토한다. 2026년 10월 공유 Supabase 프로젝트의 managed log에는 계정 식별자·IP·요청 경로 메타데이터가 포함된다. 분석 이벤트는 동의 설정과 연동하며 개인 사진을 운영자가 열어 보는 관리 화면은 MVP에 만들지 않는다.
+앱이 직접 관리하는 로그에는 request ID, 고정 API 경로, HTTP method·상태, 처리 시간, 오류 코드, 처리 단계, 허용된 오류 종류와 DB/Images provider 코드만 남긴다. API 공통 `endpoint()`가 한 줄 JSON을 출력하며 실제 사진 ID·요청 URL·본문·사용자 ID·메모·파일명·쿠키·서명 URL·OTP·token·원문 오류·stack·details는 기록하지 않는다. 실패 응답의 `error.request_id`와 `X-Request-Id`는 로그와 같은 ID를 사용하며 업로드 화면에도 표시한다. 개발 브라우저에는 업로드 단계·임의 요청 ID·Storage HTTP 상태만 기록한다. Worker 설정에는 custom logs 수집, invocation logs·traces 비활성화, query string 제거를 추가했으며 아직 배포 전이다. 호스팅·Auth·Storage 제공자의 managed logs는 별도 보존·접근 정책을 검토한다. 2026년 10월 공유 Supabase 프로젝트의 managed log에는 계정 식별자·IP·요청 경로 메타데이터가 포함된다. 분석 이벤트는 동의 설정과 연동하며 개인 사진을 운영자가 열어 보는 관리 화면은 MVP에 만들지 않는다.
 
 2026-10-11 Supabase unified logs 최근 24시간을 source·건수·시각으로만 집계해 Auth, Edge/Function, Postgres/PgBouncer, Storage 로그가 수집됨을 확인했다. Free 요금제의 관리 로그 접근 범위는 최근 1일이다. 이 집계는 보존 기간 전체나 실제 접근 권한 목록을 확인한 것은 아니다. Supabase 구성원 역할과 Cloudflare 호스팅 로그 설정은 별도 검토가 필요하다.
 

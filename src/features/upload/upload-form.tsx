@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { requestApi } from "@/lib/api";
+import { requestApi, RequestError } from "@/lib/api";
 import { formats, policy } from "@/lib/config";
 
 type Item = { file: File; requestId: string; status: string; done: boolean };
@@ -23,10 +23,12 @@ export function UploadForm() {
   async function upload() {
     setBusy(true);
     for (const item of items.filter((item) => !item.done)) {
+      let stage = "validation";
       try {
         if (!(item.file.type in formats)) throw new Error("JPEG·PNG·정적 WebP가 필요해요. HEIC는 변환 후 선택해주세요.");
         if (item.file.size > policy.maxBytes) throw new Error("10 MiB 이하 사진을 선택해주세요.");
         update(item.requestId, "업로드 준비 중…");
+        stage = "reservation";
         const { reservations } = await requestApi<{ reservations: Reservation[] }>("/api/uploads", {
           method: "POST", body: JSON.stringify({ files: [{ original_name: item.file.name, mime_type: item.file.type,
             byte_size: item.file.size, client_request_id: item.requestId }] }),
@@ -34,15 +36,26 @@ export function UploadForm() {
         const reserved = reservations[0];
         if (!reserved.already_ready) {
           update(item.requestId, "사진 전송 중…");
+          stage = "storage";
           const { error } = await createClient().storage.from(policy.bucket).upload(reserved.path!, item.file,
             { contentType: item.file.type, upsert: false, cacheControl: "0" });
           // 응답 유실로 객체가 이미 있으면 확정 API에서 실제 파일을 검증합니다.
-          if (error && !/already exists|duplicate/i.test(error.message)) throw new Error("사진 전송에 실패했어요. 다시 시도해주세요.");
+          if (error && !/already exists|duplicate/i.test(error.message)) {
+            if (process.env.NODE_ENV === "development") console.error(JSON.stringify({ event: "storage_upload_failed",
+              client_request_id: item.requestId, status: "statusCode" in error ? error.statusCode : undefined }));
+            throw new Error("사진 전송에 실패했어요. 다시 시도해주세요.");
+          }
           update(item.requestId, "사진 확인 중…");
+          stage = "completion";
           await requestApi(`/api/uploads/${reserved.id}/complete`, { method: "POST" });
         }
         update(item.requestId, "사진을 추가했어요", true);
-      } catch (error) { update(item.requestId, error instanceof Error ? error.message : "다시 시도해주세요."); }
+      } catch (error) {
+        const requestId = error instanceof RequestError ? error.requestId : undefined;
+        if (process.env.NODE_ENV === "development") console.error(JSON.stringify({ event: "upload_failed", stage,
+          client_request_id: item.requestId, request_id: requestId }));
+        update(item.requestId, `${error instanceof Error ? error.message : "다시 시도해주세요."}${requestId ? ` (요청 ID: ${requestId})` : ""}`);
+      }
     }
     setBusy(false);
   }

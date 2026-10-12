@@ -14,7 +14,7 @@ export async function rpc<Name extends keyof Functions>(name: Name, args: Omit<F
   const { user } = auth ?? await requireUser();
   const params = { ...args, p_user_id: user.id } as Functions[Name]["Args"];
   const { data: result, error } = await adminClient().rpc(name, params);
-  dbError(error);
+  dbError(error, `rpc.${name}`);
   const data: unknown = result;
   if (data && typeof data === "object" && "error" in data) {
     throw new ApiError(409, z.string().parse(data.error), "current" in data ? { current: photoSchema.parse(data.current) } : undefined);

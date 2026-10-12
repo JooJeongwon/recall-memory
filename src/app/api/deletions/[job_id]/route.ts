@@ -6,5 +6,5 @@ export async function GET(request: Request, context: { params: Promise<{ job_id:
   const { job_id } = await context.params;
   return endpoint(async (request) => {
     return json(await deletionStatus(request, job_id));
-  })(request);
+  }, "/api/deletions/[job_id]")(request);
 }

@@ -9,13 +9,13 @@ export async function requireUser() {
   if (!isConfigured()) throw new ApiError(503, "NOT_CONFIGURED");
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new ApiError(401, "UNAUTHENTICATED");
+  if (error || !data.user) throw new ApiError(401, "UNAUTHENTICATED", undefined, { stage: "auth.user", cause: error });
   const { data: profile, error: profileError } = await supabase.from("profiles")
     .select("account_state,analytics_consent,timezone").eq("user_id", data.user.id).maybeSingle();
-  dbError(profileError);
+  dbError(profileError, "auth.profile");
   if (!profile) {
     const result = await adminClient().rpc("ensure_profile", { p_user_id: data.user.id });
-    dbError(result.error);
+    dbError(result.error, "auth.ensure_profile");
   } else if (profile.account_state !== "active") throw new ApiError(403, "ACCOUNT_DELETING");
   return { supabase, user: data.user };
 }

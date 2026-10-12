@@ -7,5 +7,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   return endpoint(async () => {
     return json(await completeUpload(id));
-  })(request);
+  }, "/api/uploads/[id]/complete")(request);
 }

@@ -13,7 +13,8 @@ const messages: Record<string, string> = {
   TEMPORARY_FAILURE: "잠시 후 다시 시도해주세요.", NOT_CONFIGURED: "개발 환경 연결이 필요해요.",
 };
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, public details?: unknown) { super(code); }
+  constructor(public status: number, public code: string, public details?: unknown,
+    public diagnostic?: { stage: string; cause?: unknown }) { super(code); }
 }
 export function isAllowedAppOrigin(origin: string | null) {
   const configured = process.env.APP_BASE_URL;
@@ -59,23 +60,41 @@ export async function input<T>(request: Request, schema: ZodType<T>): Promise<T>
   try { return schema.parse(JSON.parse(body)); }
   catch { throw new ApiError(400, "INVALID_INPUT"); }
 }
-export function endpoint(handler: (request: Request) => Promise<Response>) {
+export function endpoint(handler: (request: Request) => Promise<Response>, operation = "api") {
   return async (request: Request) => {
+    const requestId = crypto.randomUUID();
+    const started = performance.now();
     try {
       if (!["GET", "HEAD"].includes(request.method)) assertOrigin(request);
-      return await handler(request);
+      const response = await handler(request);
+      response.headers.set("X-Request-Id", requestId);
+      console.info(JSON.stringify({ event: "api_request_completed", request_id: requestId, operation,
+        method: request.method, status: response.status, duration_ms: Math.round(performance.now() - started) }));
+      return response;
     } catch (error) {
       const failure = error instanceof ApiError ? error : new ApiError(error instanceof ZodError ? 400 : 503,
         error instanceof ZodError ? "INVALID_INPUT" : "TEMPORARY_FAILURE");
-      return json({ error: { code: failure.code, message: messages[failure.code] ?? messages.TEMPORARY_FAILURE,
-        request_id: crypto.randomUUID(), ...(failure.details ? { details: failure.details } : {}) } }, failure.status);
+      const cause = failure.diagnostic?.cause ?? error;
+      const providerCode = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
+      const errorType = cause instanceof Error && ["Error", "TypeError", "ReferenceError", "SyntaxError",
+        "ZodError", "ImagesError", "AuthApiError", "StorageApiError"].includes(cause.name) ? cause.name : "UnknownError";
+      // 원문 오류·stack·details에는 메모, 파일 경로, 인증 값이 들어갈 수 있습니다.
+      console.error(JSON.stringify({ event: "api_request_failed", request_id: requestId, operation,
+        method: request.method, status: failure.status, code: Object.hasOwn(messages, failure.code) ? failure.code : "TEMPORARY_FAILURE",
+        stage: failure.diagnostic?.stage ?? "handler", error_type: errorType,
+        ...(/^(?:[0-9]{2}[0-9A-Z]{3}|P000[1-4]|PGRST\d{3}|\d{3,4})$/.test(providerCode) ? { provider_code: providerCode } : {}),
+        duration_ms: Math.round(performance.now() - started) }));
+      const response = json({ error: { code: failure.code, message: messages[failure.code] ?? messages.TEMPORARY_FAILURE,
+        request_id: requestId, ...(failure.details ? { details: failure.details } : {}) } }, failure.status);
+      response.headers.set("X-Request-Id", requestId);
+      return response;
     }
   };
 }
-export function dbError(error: { message: string } | null) {
+export function dbError(error: { message: string } | null, stage = "database") {
   if (!error) return;
   const status: Record<string, number> = { NOT_FOUND: 404, ACCOUNT_DELETING: 403, VERSION_CONFLICT: 409,
     TRIAL_ENDED: 409, PHOTO_NOT_READY: 409, LIMIT_EXCEEDED: 429, INVALID_INPUT: 400 };
   const code = Object.keys(status).find((code) => error.message === code);
-  throw new ApiError(code ? status[code] : 503, code ?? "TEMPORARY_FAILURE");
+  throw new ApiError(code ? status[code] : 503, code ?? "TEMPORARY_FAILURE", undefined, { stage, cause: error });
 }

@@ -45,6 +45,18 @@ npm run dev
 
 Google OAuth를 사용할 때는 Google Authorized redirect URI를 Supabase 프로젝트 callback으로, Supabase Auth의 허용 redirect URL을 앱의 `/auth/confirm` 경로로 설정합니다. Client ID·Secret은 Supabase Google provider 설정에만 보관합니다.
 
+## 개발 중 오류 확인
+
+`npm run dev`를 실행한 터미널에 API 성공·실패를 한 줄 JSON으로 출력합니다. `operation`은 실제 사진 ID 대신 `/api/uploads/[id]/complete` 같은 고정 경로이며, `request_id`, `method`, `status`, `duration_ms`로 요청을 구분합니다. 실패 로그에는 `code`, `stage`, `error_type`과 허용된 DB/Images `provider_code`를 추가합니다. `rpc.reserve_uploads`는 DB 예약 단계, `upload.download`는 원본 다운로드, `images.info`·`images.validation`·`images.transform`은 이미지 검사·변환, `upload.thumbnail`은 썸네일 저장 단계입니다.
+
+Cloudflare 설정에 앱 주소·Supabase URL·공개 키·서버 키를 required secret binding으로 선언해 개발 런타임에서도 기존 `.env.local`을 읽도록 했습니다. 연결 값을 변경하면 개발 서버를 재시작합니다. Node.js 22.18 이상이 필요합니다. 개발 서버 실행 중 [로컬 Debug 화면](http://127.0.0.1:3000/__debug)에서도 플랫폼의 개발 로그를 확인할 수 있습니다.
+
+업로드 실패 화면의 `요청 ID`를 터미널에서 찾아 원인을 확인합니다. 같은 ID는 API 오류 응답의 `error.request_id`와 `X-Request-Id` 헤더에도 있습니다. 개발 환경의 브라우저 개발자 도구 Console에는 `upload_failed`와 `storage_upload_failed`가 표시되어 파일 검사·예약·Storage 전송·확정 중 어느 단계인지 확인할 수 있습니다. API 요청이 전송되지 않은 실패는 서버 요청 ID가 없으며 `client_request_id`로 브라우저 로그를 연결합니다.
+
+사진·메모·파일명·사용자 ID·요청 본문·쿠키·URL·원문 오류·stack·오류 details는 앱 로그에 넣지 않습니다. 개발 브라우저 로그도 단계와 임의 요청 ID, Storage HTTP 상태만 기록합니다. Worker 설정에는 [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) 수집을 추가하고 URL을 자동 기록하는 invocation logs와 traces를 끄며 query string을 제거합니다. **이 설정과 새 앱 로그는 아직 운영에 배포하지 않았습니다.** 배포 후 Cloudflare 대시보드 → Workers & Pages → `recall-memory` → Observability에서 `request_id`로 조회할 수 있습니다. 제공자 로그의 접근·보존 정책 검토는 계속 남아 있습니다.
+
+2026-10-12 이번 로그 변경은 단위 테스트 22개·lint·typecheck·Worker build를 통과했습니다. 로컬 합성 오류 요청으로 응답·헤더·터미널 로그의 요청 ID가 같음을 확인했고 Debug 화면은 HTTP 200을 반환했습니다. 실제 8장 업로드 실패 재현과 원격 로그 수집은 아직 확인하지 않았습니다.
+
 ## DB 변경과 타입
 
 최초 migration은 [supabase/migrations/20261008045831_initial_schema.sql](supabase/migrations/20261008045831_initial_schema.sql)입니다. `supabase/schema.sql`은 최신 전체 스키마이며 후속 변경은 새 migration으로 남깁니다. `db:prepare`는 최초 파일을 생성한 작업이므로 다시 실행할 필요가 없습니다. 사진 소프트 삭제와 두 단계 메모 기한 migration은 각각 `20261012024618_photo_soft_delete.sql`, `20261012024626_note_retention_checkpoints.sql`입니다. 두 migration은 공유 원격 프로젝트에 2026-10-12 적용했습니다. 기한 migration은 기존 `preserved_at`을 해제하고 저장된 메모를 첫 메모로 취급합니다. 기존 사진에도 새 기한을 소급 적용합니다. 원격 스키마에서 타입을 생성해 `src/types/database.ts`의 필드와 RPC가 일치함을 확인했습니다.

@@ -40,5 +40,13 @@ it("이미지 변환 서비스 오류는 재시도 가능한 실패로 반환한
     transform: () => ({ output: async () => ({ response: () => new Response("failed", { status: 500 }) }) }),
   });
   await expect(validateImage(Buffer.from("image"), "image/png"))
-    .rejects.toMatchObject({ status: 503, code: "TEMPORARY_FAILURE" });
+    .rejects.toMatchObject({ status: 503, code: "TEMPORARY_FAILURE", diagnostic: { stage: "images.transform" } });
+});
+
+it("Images 오류 코드를 원문 없이 진단 로그에 전달한다", async () => {
+  const error = Object.assign(new Error("synthetic-private-image-path"), { name: "ImagesError", code: 9412 });
+  images.info.mockRejectedValue(error);
+  await expect(validateImage(Buffer.from("image"), "image/png")).rejects.toMatchObject({
+    status: 415, diagnostic: { stage: "images.info", cause: error },
+  });
 });

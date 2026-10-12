@@ -28,17 +28,20 @@ function isAnimated(bytes: Uint8Array) {
 
 export async function validateImage(bytes: Uint8Array, expectedMime: string) {
   if (bytes.byteLength > policy.maxBytes) throw new ApiError(413, "FILE_TOO_LARGE");
+  let stage = "images.info";
   try {
     const stream = () => new ReadableStream<Uint8Array>({
       start(controller) { controller.enqueue(bytes); controller.close(); },
     });
     const meta = await env.IMAGES.info(stream());
+    stage = "images.validation";
     const mimeByFormat: Record<string, string> = { jpeg: "image/jpeg", jpg: "image/jpeg", "image/jpeg": "image/jpeg",
       png: "image/png", "image/png": "image/png", webp: "image/webp", "image/webp": "image/webp" };
     const mime = mimeByFormat[meta.format];
     if (!mime || mime !== expectedMime || !("width" in meta) || !meta.width || !meta.height || isAnimated(bytes))
       throw new ApiError(415, "UNSUPPORTED_MEDIA");
     if (meta.width * meta.height > policy.maxPixels) throw new ApiError(413, "FILE_TOO_LARGE");
+    stage = "images.transform";
     const result = await env.IMAGES.input(stream())
       .transform({ width: 1280, height: 1280 })
       .output({ format: "image/webp" });
@@ -47,9 +50,9 @@ export async function validateImage(bytes: Uint8Array, expectedMime: string) {
     const thumbnail = new Uint8Array(await response.arrayBuffer());
     return { width: meta.width, height: meta.height, mime, thumbnail };
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) { error.diagnostic ??= { stage }; throw error; }
     if (error instanceof Error && error.name === "ImagesError" && (error as Error & { code?: number }).code === 9412)
-      throw new ApiError(415, "UNSUPPORTED_MEDIA");
-    throw new ApiError(503, "TEMPORARY_FAILURE");
+      throw new ApiError(415, "UNSUPPORTED_MEDIA", undefined, { stage, cause: error });
+    throw new ApiError(503, "TEMPORARY_FAILURE", undefined, { stage, cause: error });
   }
 }
