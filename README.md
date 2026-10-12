@@ -10,6 +10,8 @@
 
 테스트의 `CHECKPOINT_BASE_URL`은 배포 후 동일 흐름 검증에 사용할 수 있다. 반드시 해당 배포와 동일한 Supabase 연결을 사용하며, 테스트는 생성한 `checkpoint-*` 계정의 데이터만 수정·정리한다.
 
+운영 검증에서 확인한 저장·다운로드 경합을 방지하기 위해 저장 중에는 다운로드를 잠근다. 서버의 사용자·관리자 Supabase 요청은 명시적인 `cache: "no-store"`를 사용하며 테스트는 수정 성공 응답을 기다린 뒤 ZIP을 검사한다. 운영 초기 로딩을 고려해 화면 기대값의 대기 한도는 20초다.
+
 사진을 다시 보고 한 줄 메모와 함께 보관하는 모바일 웹앱입니다. 정책은 [PROJECT.md](PROJECT.md), API·DB 계약은 [ARCHITECTURE.md](ARCHITECTURE.md), 검증 상태는 [ROADMAP.md](ROADMAP.md)를 기준으로 합니다.
 
 ## 현재 상태

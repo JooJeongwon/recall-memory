@@ -8,6 +8,7 @@ export function adminClient() {
   if (!key) throw new ApiError(503, "NOT_CONFIGURED");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   return createClient<Database>(url, key, {
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) },
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

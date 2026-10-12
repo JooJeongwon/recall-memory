@@ -208,7 +208,7 @@ export function ViewerOverlay({
             </p>
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            {!isDemoMode() && <ExportButton id={effectivePhoto.id} compact />}
+            {!isDemoMode() && <ExportButton id={effectivePhoto.id} compact disabled={saveBusy} />}
             <button
               onClick={() => { setEditing(true); setEditText(editableNote(effectivePhoto)); setSaveMsg(""); }}
               style={{

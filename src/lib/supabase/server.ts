@@ -8,7 +8,7 @@ export async function createClient() {
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { cookies: {
+    { global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) }, cookies: {
       getAll: () => jar.getAll(),
       setAll(values) {
         try { values.forEach(({ name, value, options }) => jar.set(name, value, options)); }

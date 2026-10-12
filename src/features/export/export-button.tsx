@@ -3,11 +3,12 @@ import { useState } from "react";
 import { requestApi } from "@/lib/api";
 import { isDemoMode } from "@/lib/demo";
 
-export function ExportButton({ id, compact }: { id: string; compact?: boolean }) {
+export function ExportButton({ id, compact, disabled = false }: { id: string; compact?: boolean; disabled?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   function download() {
+    if (disabled || busy) return;
     if (isDemoMode()) { setMessage("데모 모드에서는 다운로드할 수 없어요."); return; }
     setBusy(true); setMessage("");
     // 서버가 Content-Disposition: attachment 로 응답하므로 모든 브라우저(iOS Safari 포함)에서 다운로드됩니다.
@@ -28,7 +29,7 @@ export function ExportButton({ id, compact }: { id: string; compact?: boolean })
 
   if (compact) {
     return (
-      <button type="button" aria-label="사진과 메모 다운로드" disabled={busy} onClick={download}
+      <button type="button" aria-label="사진과 메모 다운로드" disabled={busy || disabled} onClick={download}
         style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "inherit", border: 0 }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -45,7 +46,7 @@ export function ExportButton({ id, compact }: { id: string; compact?: boolean })
 
   return (
     <div>
-      <button className="ghost" disabled={busy} onClick={download}>
+      <button className="ghost" disabled={busy || disabled} onClick={download}>
         {busy ? "파일 준비 중…" : "사진과 메모 가져가기"}
       </button>
       {message && (

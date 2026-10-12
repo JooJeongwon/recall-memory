@@ -6,6 +6,11 @@ import {readFile} from 'node:fs/promises';
 import {unzipSync,strFromU8} from 'fflate';
 
 test('첫 메모 → 재접속 → 두 번째 메모 → 보관 → 수정·충돌·ZIP 반출',async({page,baseURL})=>{
+ page.on('pageerror',error=>console.log('Browser error:',error.message));
+ page.on('response',response=>{
+  const path=new URL(response.url()).pathname;
+  if(path.startsWith('/api/')) console.log('API',response.request().method(),path.replace(/[0-9a-f-]{36}/g,':id'),response.status());
+ });
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL!;
  const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
  const admin=createClient(url,process.env.SUPABASE_SERVER_SECRET_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -64,7 +69,11 @@ test('첫 메모 → 재접속 → 두 번째 메모 → 보관 → 수정·충�
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button',{name:'수정',exact:true}).click();
   await page.getByRole('dialog').getByRole('textbox').fill('보관함에서 수정한 두 번째 메모');
+  const viewerSaveResponse=page.waitForResponse(r=>r.url().endsWith(`/api/photos/${id}/note`)&&r.request().method()==='PUT');
   await page.getByRole('button',{name:'저장',exact:true}).click();
+  const viewerSaved=await viewerSaveResponse;
+  expect(viewerSaved.status()).toBe(200);
+  expect((await viewerSaved.json()).second_note_text).toBe('보관함에서 수정한 두 번째 메모');
   await expect(page.getByRole('dialog').getByText('보관함에서 수정한 두 번째 메모',{exact:true})).toBeVisible();
   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'사진과 메모 다운로드'}).click()]);
   const zip=unzipSync(await readFile((await download.path())!));
