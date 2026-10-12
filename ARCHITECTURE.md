@@ -1,6 +1,6 @@
 # 기억할 권리 웹앱 아키텍처 설계
 
-이 문서는 `PROJECT.md`의 MVP를 실제 웹앱으로 구현하기 위한 기본 설계다. 사진 파일과 메타데이터를 분리하고, 메모와 보관 상태는 하나의 DB 행에 묶어 저장한다. 실험 기간과 사진 보존 수명을 분리하는 것이 핵심이다.
+이 문서는 `PROJECT.md`의 MVP를 실제 웹앱으로 구현하기 위한 기본 설계다. 사진 파일과 메타데이터를 분리하고, 두 단계 메모와 보관 상태는 하나의 DB 행에 묶어 저장한다. 실험 기간과 사진별 메모 보존 기한을 분리하는 것이 핵심이다.
 
 웹 런타임은 Cloudflare Workers + vinext로 정했다. `recall-memory` Worker는 2026년 10월 11일 [workers.dev](https://recall-memory.jwjoo0512.workers.dev)에 배포했고 Supabase 런타임 secret을 연결했다. `/`·`/login`은 200, 비로그인 `/api/me`는 `401 UNAUTHENTICATED`다. 운영 DB는 개발과 공유하는 기존 Supabase 프로젝트다. GitHub Actions 배포 workflow는 추가했지만 `CLOUDFLARE_API_TOKEN` secret이 없어 실제 배포 단계는 아직 실행되지 않았다. Google OAuth 실제 Worker 로그인도 미검증이며 상세 상태는 `README.md`와 `ROADMAP.md`를 참고한다.
 
@@ -63,11 +63,11 @@ Workers 호환성 날짜는 2026-10-10이며 `nodejs_compat`가 적용된다. �
 | `supabase/migrations/`, `supabase/functions/maintenance/` | DB 변경·정리 작업 |
 | `supabase/tests/`, `tests/unit/`, `tests/integration/`, `tests/e2e/` | DB 정책·도메인·연결·화면 검증 |
 
-초기 소스에서 보호 화면은 `src/app/(private)` route group 안에 있다. 외부 경로는 동일하며 공통 layout에서 인증을 확인한다. 최초 migration은 `supabase/migrations/20261008045831_initial_schema.sql`이다. `supabase/schema.sql`은 최초 원본으로 유지하며 후속 변경은 새 migration에 작성한다. `src/types/database.ts`는 실제 적용된 스키마에서 생성하여 클라이언트에 연결한다.
+초기 소스에서 보호 화면은 `src/app/(private)` route group 안에 있다. 외부 경로는 동일하며 공통 layout에서 인증을 확인한다. 최초 migration은 `supabase/migrations/20261008045831_initial_schema.sql`이다. `supabase/schema.sql`은 최신 전체 스키마이며 후속 변경은 새 migration에 작성한다. `src/types/database.ts`는 실제 적용된 스키마에서 생성하여 클라이언트에 연결한다.
 
 ## 4. 데이터 모델의 방침
 
-사진의 보관 상태와 파일 처리 상태를 분리한다. 정상 파일은 `lifecycle = ready`, 보관 사진은 여기에 `preserved_at IS NOT NULL` 조건을 추가한다. 메모와 보관 상태는 `photos` 한 행에 있어 원자적으로 변경할 수 있다.
+사진의 보관 상태와 파일 처리 상태를 분리한다. 정상 파일은 `lifecycle = ready`, 두 메모를 완료한 보관 사진은 여기에 `preserved_at IS NOT NULL` 조건을 추가한다. 두 메모와 보관 상태는 `photos` 한 행에 있어 원자적으로 변경할 수 있다.
 
 날짜·GPS·감정 컬럼, 별도 AI 결과 테이블, 팀·공유 권한 모델은 초기 DB에 넣지 않는다. 원본 EXIF를 검색 가능한 DB 데이터로 추출하지 않는다.
 
@@ -118,28 +118,30 @@ erDiagram
 | `user_id` | UUID FK | 소유자 |
 | `trial_id` | UUID FK | 참여 실험 |
 | `client_request_id` | UUID, 사용자와 복합 UNIQUE | 업로드 예약 중복 방지 |
-| `lifecycle` | enum 또는 CHECK text | `uploading / ready / failed / deleting / deleted` |
+| `lifecycle` | enum 또는 CHECK text | `uploading / ready / failed / soft_deleted / deleting / deleted` |
 | `original_key` | text UNIQUE | 원본 Storage 객체 경로 |
 | `thumbnail_key` | text UNIQUE, nullable | 썸네일 객체 경로 |
 | `original_name` | text | 사용자가 선택한 파일명, 로그에 기록하지 않음 |
 | `mime_type` | text | 서버가 확인한 MIME |
 | `byte_size` | bigint | 실제 원본 바이트 수 |
 | `width`, `height` | integer | 디코딩 후 실제 크기 |
-| `note_text` | text, 기본 빈 문자열 | 현재 메모, 최대 500자 |
-| `preserved_at` | timestamptz, nullable | 최초 보관 시각, 메모 비워도 유지 |
-| `first_note_at` | timestamptz, nullable | 최초 유효 메모 저장 시각 |
+| `note_text` | text, 기본 빈 문자열 | 첫 번째 메모, 최대 500자 |
+| `second_note_text` | text, 기본 빈 문자열 | 두 번째 메모, 최대 500자 |
+| `preserved_at` | timestamptz, nullable | 두 번째 메모 저장 시각, 이후 메모를 비워도 유지 |
+| `first_note_at` | timestamptz, nullable | 첫 번째 유효 메모 저장 시각 |
+| `second_note_at` | timestamptz, nullable | 두 번째 유효 메모 저장 시각 |
 | `first_viewed_at` | timestamptz, nullable | 다시 보기에서 최초 조회, 순서 이어보기용 |
 | `version` | integer, 기본 1 | 메모 충돌·상태 변경 확인 |
 | `upload_deadline_at` | timestamptz | 예약 후 24시간, 미완료 정리 기준 |
 | `validation_token`, `validation_until` | UUID·timestamptz, nullable | 서버 확정 처리의 5분 lease, 이전 작업의 늦은 확정 거절 |
 | `ready_at` | timestamptz, nullable | 검증 완료 시각 |
-| `delete_requested_at` | timestamptz, nullable | 사용자 삭제 또는 실패 업로드 정리 요청 |
+| `delete_requested_at` | timestamptz, nullable | 소프트 삭제 또는 실제 삭제 요청 시각 |
 | `deleted_at` | timestamptz, nullable | 실제 파일 정리 완료 시각 |
 | `created_at`, `updated_at` | timestamptz | 생성·수정 시각 |
 
 소유권 교차 연결을 막기 위해 `trials`에 `(id, user_id)` UNIQUE를 두고 `photos(trial_id, user_id)`가 이를 참조하는 복합 FK를 둔다. `user_id`, `trial_id`, 객체 경로는 생성 후 일반 수정 대상이 아니다.
 
-`ready` 행은 원본·썸네일과 검증 메타데이터가 모두 있어야 한다. 유효 메모가 최초 저장되면 `first_note_at`과 `preserved_at`을 함께 설정한다. 보관 상태만 있는 행에서 빈 메모는 허용한다. 메모 길이는 프런트와 DB에서 같은 Unicode 코드포인트 기준으로 검증한다.
+`ready` 행은 원본·썸네일과 검증 메타데이터가 모두 있어야 한다. 첫 메모 기한은 `ready_at + 24 hours`, 두 번째 메모 기한은 `first_note_at + 48 hours`다. `preserved_at`은 두 번째 메모를 저장할 때만 설정한다. 보관 후 두 메모를 수정하거나 비워도 최초 시각과 보관 상태는 유지한다. 메모 길이는 프런트와 DB에서 같은 Unicode 코드포인트 기준으로 검증한다.
 
 ### 4.4 events
 
@@ -166,7 +168,7 @@ erDiagram
 | `id` | UUID PK | 정리 작업 |
 | `user_id` | UUID FK, nullable, 계정 정리 시 SET NULL | 진행 중 대상 소유자, 완료 후 연결 제거 |
 | `photo_id` | UUID, nullable | 개별 사진 정리 대상 |
-| `kind` | `photo_delete / account_delete / incomplete_upload` | 허용 정리 이유 |
+| `kind` | `photo_delete / account_delete / incomplete_upload / retention_expired` | 허용 정리 이유 |
 | `dedupe_key` | text UNIQUE | 중복 요청 방지 |
 | `status` | `pending / running / retry / done / failed` | 작업 상태 |
 | `attempts` | integer | 시도 횟수 |
@@ -206,16 +208,16 @@ UNIQUE 제약으로 이미 생긴 인덱스는 중복 생성하지 않는다. �
 | 업로드 예약 | 검증된 사용자 요청을 받은 서버 |
 | 원본 PUT | 예약 객체에 대한 사용자 세션과 Storage RLS |
 | 썸네일 생성·파일 삭제 | 서버 또는 유지관리 함수의 비밀 키 |
-| 정상 사진 SELECT·다운로드 | 본인 세션, `ready` 행·활성 계정만 |
+| 정상 사진 SELECT·다운로드 | 본인 세션, `ready` 행·활성 계정만; `soft_deleted` 행과 객체는 사용자 접근 차단 |
 | DB 직접 변경·직접 삭제 | 일반 브라우저 사용자에게 허용하지 않음 |
 
-Storage SELECT 정책은 경로의 사용자 ID뿐 아니라 해당 `photos`의 소유자, 객체 키, `ready` 상태와 활성 계정까지 확인한다. 업로드 중인 파일과 삭제 요청 파일이 목록·다운로드에 노출되지 않게 한다.
+Storage SELECT 정책은 `photos`의 소유자, 객체 키, `ready` 상태와 활성 계정을 확인한다. 소프트 삭제된 행과 객체는 일반 사용자 RLS 및 API에서 숨기며 서버 권한으로만 복구할 수 있다. 업로드 중인 파일도 노출하지 않는다.
 
 메모 조회는 DB RLS로 본인 행만 허용한다. 인증 사용자에게 테이블 직접 UPDATE 권한을 주지 않아 `ends_at`·소유자·보관 상태 조작을 막는다. 공개 테이블의 SELECT 권한, RLS 정책, 관련 함수 EXECUTE 권한을 명시적으로 설정한다.
 
 서버 변경 함수는 `SECURITY INVOKER`로 만들고 EXECUTE를 PUBLIC·anon·authenticated에서 회수한 뒤 서버 역할에만 허용한다. 서버 역할은 RLS를 우회하므로 함수가 전달받은 검증된 사용자 ID로 소유권을 다시 검사해야 한다. 임의 `user_id`를 요청 본문에서 받지 않는다.
 
-브라우저에는 Storage 서명 URL이나 업로드 token을 반환하지 않는다. 조회는 먼저 사용자 세션으로 사진 소유권·`ready` 상태를 확인한 뒤 Storage에서 읽어 같은 출처의 `private, no-store` API 응답으로 돌려준다. 예약 업로드는 비공개 버킷의 INSERT RLS가 활성 계정·소유자·예약 키·업로드 기한·실험 기간을 확인한다. 삭제 요청은 새 API 조회를 즉시 막고 유지관리 작업이 실제 객체를 제거한다.
+브라우저에는 Storage 서명 URL이나 업로드 token을 반환하지 않는다. 조회는 사용자 세션으로 사진 소유권·라이프사이클을 확인한 뒤 Storage에서 읽어 같은 출처의 `private, no-store` API 응답으로 돌려준다. 예약 업로드는 비공개 버킷의 INSERT RLS가 활성 계정·소유자·예약 키·업로드 기한·실험 기간을 확인한다. 사용자 사진 삭제는 일반 DB·Storage 조회를 막되 행과 객체는 남긴다. 계정 삭제와 미완료 업로드 정리는 유지관리 작업이 실제 객체를 제거한다.
 
 ## 6. 상태와 기간 규칙
 
@@ -226,23 +228,28 @@ stateDiagram-v2
     uploading --> failed: 검증 실패
     uploading --> deleting: 미완료 기한 종료
     failed --> deleting: 실패 파일 정리
-    ready --> deleting: 사용자 삭제 요청
+    ready --> deleting: 메모 기한 종료
+    soft_deleted --> deleting: 메모 기한 종료
+    ready --> soft_deleted: 사용자 삭제
+    soft_deleted --> ready: 서비스 복구
+    soft_deleted --> deleting: 계정 전체 삭제
     deleting --> deleted: 객체 삭제 완료
     deleted --> [*]
 ```
 
-보관은 별도 라이프사이클 전이가 아니다. `ready` 상태 안에서 메모 저장으로 `preserved_at`이 생기며, 기간 만료는 위 상태도에 전이를 만들지 않는다.
+보관은 별도 라이프사이클 전이가 아니다. `ready` 상태에서 두 메모를 모두 저장하면 `preserved_at`이 생긴다. 메모 기한을 넘긴 사진은 `deleting`으로 바뀌고 기존 Storage 삭제 큐가 처리한다.
 
 | 조건 | 허용 동작 |
 | --- | --- |
 | 실험 미시작 | 업로드 예약·첫 확정, 아직 기간 없음 |
-| 실험 진행 중 | 새 업로드, 사진 조회, 메모, 보관함, 내보내기, 삭제 |
-| 실험 종료 | 기존 사진 조회, 메모 추가·수정, 내보내기, 삭제 |
+| 실험 진행 중 | 새 업로드, 사진 조회, 메모, 보관함, 내보내기, 휴지통 이동·복구 |
+| 실험 종료 | 두 메모가 완료된 사진 조회·수정·내보내기, 사용자 삭제 |
+| 사진 소프트 삭제 | `soft_deleted`로 전환, 사용자 화면·API·RLS에서 숨김; 서비스 역할의 복구 RPC로만 되돌릴 수 있음 |
 | 계정 deleting | 사용자 데이터 API 차단, 삭제 진행 상태 조회만 허용 |
 
 업로드 예약과 확정 모두 서버·DB 시간을 확인한다. 만료 전에 예약해도 만료 후 확정한 신규 사진은 `ready`로 만들지 않고 정리한다. 첫 정상 확정은 아직 시작하지 않은 실험을 시작한다.
 
-메모 저장은 실험 종료 후에도 허용하되 `first_note_at <= ends_at`인 경우만 실험 내 최초 보관으로 집계한다. 브라우저 시계는 화면 표시용이며 정책 판단에 쓰지 않는다.
+첫 메모는 업로드 확정 후 24시간 안에 저장해야 한다. 첫 메모 뒤 48시간 안에 두 번째 메모를 저장해야 `preserved_at`이 설정된다. 메모 기한이 지난 경우 DB 함수가 삭제를 예약하고 저장을 거절한다. 유지관리 함수는 10분마다 기한이 지난 `ready`·`soft_deleted` 사진을 삭제 큐에 넣는다. 실험 종료 후에도 해당 메모 기한 안이면 저장할 수 있다. 브라우저 시계는 화면 표시용이며 정책 판단에 쓰지 않는다.
 
 ## 7. 업로드 처리
 
@@ -264,17 +271,18 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 
 ## 8. 메모와 보관 트랜잭션
 
-`PUT /api/photos/[id]/note` 입력은 `note_text`, `expected_version`, `request_id`다. `request_id`는 분석 중복 구분과 요청 추적용이고 실제 수정 충돌은 버전으로 확인한다.
+`PUT /api/photos/[id]/note` 입력은 `note_stage` (`first / second`), `note_text`, `expected_version`, `request_id`다. `request_id`는 분석 중복 구분과 요청 추적용이고 실제 수정 충돌은 버전으로 확인한다.
 
 처리는 하나의 DB 함수 안에서 다음 순서를 따른다.
 
 1. 해당 `user_id`의 활성 계정과 `ready` 사진을 확인하고 행 잠금을 획득한다.
-2. 버전이 다르면 409 충돌을 반환한다. 네트워크 재시도로 현재 내용이 이미 요청 내용과 같다면 동일 결과를 반환할 수 있다.
-3. 최초 저장에서 빈 메모는 거절한다. 보관된 사진의 기존 메모 비우기는 허용한다.
-4. `note_text`를 저장하고 최초 유효 메모라면 `preserved_at`·`first_note_at`을 DB 현재 시각으로 설정한다.
-5. 실제 내용 변경 또는 최초 보관에만 버전을 증가시킨다. 최초 시각은 덮어쓰지 않는다.
-6. 분석 동의가 있다면 허용 이벤트를 남긴다. 동일 저장의 재시도를 새 보관으로 세지 않는다.
-7. 커밋 후 사진·메모·보관 시각·버전을 반환한다.
+2. DB 현재 시각으로 메모 기한을 확인한다. 기한이 지났으면 사진 삭제를 예약하고 `PHOTO_EXPIRED`를 반환한다.
+3. `note_stage`에 맞는 메모가 비어 있지 않은지 확인한다. 보관 후에는 메모 비우기를 허용한다.
+4. 버전이 다르면 409 충돌을 반환한다. 네트워크 재시도로 해당 메모가 이미 요청 내용과 같다면 동일 결과를 반환할 수 있다.
+5. 첫 메모는 `note_text`·`first_note_at`, 두 번째 메모는 `second_note_text`·`second_note_at`에 저장한다. 두 번째 저장 시 `preserved_at`을 설정한다.
+6. 실제 내용 변경이나 최초 시각 기록에 버전을 증가시킨다. 각 최초 시각은 덮어쓰지 않는다.
+7. 분석 동의가 있다면 허용 이벤트를 남긴다. 동일 저장의 재시도를 새 보관으로 세지 않는다.
+8. 커밋 후 두 메모·기한 시각·보관 시각·버전을 반환한다.
 
 메모를 보관하고 나서 원본을 다른 버킷으로 이동하지 않는다. 선택 여부는 DB 값으로 표현하여 파일 이동 실패가 보관 실패로 이어지지 않게 한다.
 
@@ -290,16 +298,16 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 | `GET /api/photos` | cursor, limit, `all / preserved` | 본인 정상 사진 목록, 200 |
 | `GET /api/photos/[id]` | 상세 조회 | 메모·버전·보관 시각, 200 |
 | `POST /api/photos/[id]/view` | 실제 다시 보기 화면에 사진이 나타난 뒤 호출 | 최초 조회 시각 기록, 204 |
-| `GET /api/photos/[id]/asset` | `original / thumbnail` | 본인 파일의 바이너리 스트림, `private, no-store`, 200 |
-| `PUT /api/photos/[id]/note` | 메모·expected_version·request_id | 저장 결과, 200 |
-| `GET /api/photos/[id]/export` | 내보내기 준비 | ZIP 파일명·`memory.json` 데이터; 원본은 asset API에서 별도 수신, 200 |
-| `DELETE /api/photos/[id]` | 명시적 삭제 요청 | 삭제 작업 ID·상태, 202 |
+| `GET /api/photos/[id]/asset` | `kind=original / thumbnail` | 본인 정상 사진의 바이너리 스트림, `private, no-store`, 200 |
+| `PUT /api/photos/[id]/note` | note_stage·메모·expected_version·request_id | 저장 결과, 200; 기한 초과는 `PHOTO_EXPIRED`, 409 |
+| `GET /api/photos/[id]/export` | 내보내기 준비 | ZIP 파일명·두 메모를 포함한 `memory.json` v2; 원본은 asset API에서 별도 수신, 200 |
+| `DELETE /api/photos/[id]` | 사진·메모를 사용자 화면에서 삭제, 복구 데이터는 유지 | `{ status: "deleted" }`, 200 |
 | `POST /api/events` | 허용 이벤트·client_event_id | 동의 여부에 따라 기록 또는 무기록, 204 |
 | `PATCH /api/me/preferences` | 분석 동의·타임존 | 현재 설정, 200 |
 | `DELETE /api/me` | 본인 계정·데이터 삭제 | 삭제 작업 ID·진행 확인 토큰, 202 |
 | `GET /api/deletions/[job_id]` | 본인 세션 또는 작업별 진행 토큰 | 진행 중·실패·완료만, 200 |
 
-목록은 기본 12개, 최대 20개이며 안정적인 `(ready_at, id)` 또는 `(preserved_at, id)` cursor를 쓴다. 다시 보기의 최초 조회 시각은 사용자가 실제로 사진을 본 뒤 POST로 한 번만 기록한다. GET·prefetch만으로 조회 행동을 기록하지 않는다. 분석용 반복 조회는 동의한 이벤트와 별도로 취급한다.
+목록은 기본 12개, 최대 20개이며 안정적인 `(ready_at, id)` 또는 `(preserved_at, id)` cursor를 쓴다. 소프트 삭제된 행은 사용자 목록 API에서 반환하지 않는다. 다시 보기의 최초 조회 시각은 사용자가 실제로 사진을 본 뒤 POST로 한 번만 기록한다. GET·prefetch만으로 조회 행동을 기록하지 않는다. 분석용 반복 조회는 동의한 이벤트와 별도로 취급한다.
 
 업로드 확정 응답은 사진 결과만 반환한다. 사진 확정 후 부가 계정 조회 실패 때문에 업로드 성공을 실패로 응답하지 않는다. 다시 보기와 보관함 목록은 재시도 전 요청의 늦은 성공·오류 응답을 무시한다.
 
@@ -314,6 +322,7 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 | 409 `VERSION_CONFLICT` | 저장된 버전과 다른 메모 수정 |
 | 409 `TRIAL_ENDED` | 신규 업로드 기간 종료 |
 | 409 `PHOTO_NOT_READY` | 미완료·삭제 중 사진에 저장 시도 |
+| 409 `PHOTO_EXPIRED` | 메모 기한이 지나 사진과 메모 삭제를 시작함 |
 | 413 `FILE_TOO_LARGE` | 파일 크기·픽셀 수 초과 |
 | 415 `UNSUPPORTED_MEDIA` | 미지원·위장·깨진 이미지 |
 | 429 `LIMIT_EXCEEDED` | 파일 수·요청 속도 제한 |
@@ -323,6 +332,7 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 
 ```json
 {
+  "note_stage": "first",
   "note_text": "비 오는 날에도 같이 걸어줘서 고마웠다.",
   "expected_version": 1,
   "request_id": "<client-generated-uuid>"
@@ -333,8 +343,10 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 {
   "photo_id": "<photo-uuid>",
   "note_text": "비 오는 날에도 같이 걸어줘서 고마웠다.",
-  "preserved_at": "2026-10-08T01:00:00Z",
+  "second_note_text": "",
+  "preserved_at": null,
   "first_note_at": "2026-10-08T01:00:00Z",
+  "second_note_at": null,
   "version": 2
 }
 ```
@@ -354,29 +366,29 @@ Storage와 DB는 하나의 분산 트랜잭션이 아니다. 예약 행 → 파�
 
 ZIP 이름은 `memory-{photo_id}.zip`으로 제안한다.
 
-`original`의 확장자는 실제 형식에 따른다. 안전한 파일명을 쓰고 원래 파일명은 JSON 필드로 보존한다. JSON은 UTF-8이며 최소 필드는 `schema_version: 1`, `photo_id`, `original_name`, `note_text`, `uploaded_at`, `preserved_at`, `exported_at`이다. 미보관 사진의 `preserved_at`은 null이다.
+`original`의 확장자는 실제 형식에 따른다. 안전한 파일명을 쓰고 원래 파일명은 JSON 필드로 보존한다. JSON은 UTF-8이며 최소 필드는 `schema_version: 2`, `photo_id`, `original_name`, `note_text`, `second_note_text`, 두 메모 시각, `uploaded_at`, `preserved_at`, `exported_at`이다. 미보관 사진의 `preserved_at`은 null이다.
 
-ZIP을 만들기 전에 이미지 읽기와 JSON 생성이 모두 성공해야 한다. 만료·네트워크 실패를 표시하고 URL을 재발급할 수 있다. 다운로드 버튼을 눌렀다는 이유로 실제 보존 성공을 기록하지 않는다. QA는 ZIP을 직접 열고 원본 해시와 한글 메모를 비교한다.
+ZIP을 만들기 전에 이미지 읽기와 JSON 생성이 모두 성공해야 한다. 네트워크 실패를 표시하고 다시 요청할 수 있다. 다운로드 버튼을 눌렀다는 이유로 실제 보존 성공을 기록하지 않는다. QA는 ZIP을 직접 열고 원본 해시와 두 한글 메모를 비교한다.
 
 ### 10.2 개별 삭제
 
-1. UI가 사진과 메모가 함께 삭제된다는 사실과 내보내기를 안내한다.
-2. 사용자 확인 후 서버가 트랜잭션으로 `deleting` 표시와 정리 작업을 만든다.
-3. 새 조회 URL·메모 저장을 차단하고 목록에서 숨긴다.
-4. 유지관리 함수가 원본·썸네일을 Storage API로 삭제한다. 이미 없는 객체는 성공으로 취급한다.
-5. 성공 후 민감한 메모·파일명 등을 비우고 `deleted`로 확정한다.
+1. 확인창에서 화면에서 삭제되며 데이터는 복구를 위해 서비스에 남는다는 점을 안내한다.
+2. 사용자 확인 후 DB 트랜잭션에서 `ready`를 `soft_deleted`로 바꾸고 `delete_requested_at`을 기록한다. 사진 원본·썸네일·메모·보관 정보는 그대로 둔다.
+3. 사용자 화면·일반 DB/Storage RLS·상세·목록·내보내기·메모 저장 API에서 숨긴다. 삭제한 사진 목록이나 사용자 복구 화면은 제공하지 않는다.
+4. 필요할 때만 서버 전용 `restore_photo` RPC로 `soft_deleted`를 `ready`로 되돌릴 수 있다. 일반 사용자의 EXECUTE 권한과 restore API는 두지 않는다.
+5. 사용자 사진 삭제는 화면에서 숨기며 소프트 삭제 사진도 계정당 20장 한도에 포함한다. 두 메모 기한을 채우지 못한 소프트 삭제 사진은 기한이 지나면 자동 정리 대상이다. 두 메모가 모두 저장된 사진은 복구 또는 계정 전체 삭제까지 유지한다.
 
-삭제 완료 전에는 “삭제 중”으로 표시한다. DB 행을 먼저 물리 삭제해 파일 위치를 잃지 않는다. 동일 삭제 요청은 같은 작업을 반환한다.
+`soft_delete_photo`와 `restore_photo`는 profile과 photo 행을 같은 순서로 잠가 메모 수정·계정 삭제와 직렬화한다. 두 함수는 서버 역할만 실행할 수 있고 사용자 조회 정책은 `ready` 행과 객체만 허용한다. 브라우저에 DB·Storage 직접 쓰기 권한은 없다.
 
 ### 10.3 계정 삭제와 유지관리
 
 계정 삭제는 `profiles.account_state = deleting`을 먼저 적용한다. 새 사용자 데이터 접근을 차단하고 세션을 종료하는 절차를 진행한다. 재시도를 담당하는 작업은 로그아웃과 무관하게 계속 처리한다.
 
-모든 본인 파일이 삭제된 뒤 메모·사진·실험·개인 이벤트·profile과 Auth 계정을 제거한다. 파일 정리 전에는 참조 행을 먼저 제거하지 않는다. 진행 확인에는 32바이트 난수 토큰을 발급하고 서버에는 SHA-256 해시만 저장한다. 브라우저는 토큰을 현재 탭의 sessionStorage에 최대 24시간 보관하고 Authorization 헤더로 해당 작업 조회에만 사용한다. 계정이 삭제되어도 진행 중·실패·완료 상태만 확인할 수 있으며 사용자·파일·메모 정보는 반환하지 않는다. 토큰 만료는 조회 권한만 끝내며 진행 중 정리 작업을 없애지 않는다. 완료된 작업의 최소 결과는 토큰 만료 후 정리한다.
+소프트 삭제 사진을 포함한 모든 본인 파일이 삭제된 뒤 메모·사진·실험·개인 이벤트·profile과 Auth 계정을 제거한다. 파일 정리 전에는 참조 행을 먼저 제거하지 않는다. 진행 확인에는 32바이트 난수 토큰을 발급하고 서버에는 SHA-256 해시만 저장한다. 브라우저는 토큰을 현재 탭의 sessionStorage에 최대 24시간 보관하고 Authorization 헤더로 해당 작업 조회에만 사용한다. 계정이 삭제되어도 진행 중·실패·완료 상태만 확인할 수 있으며 사용자·파일·메모 정보는 반환하지 않는다. 토큰 만료는 조회 권한만 끝내며 진행 중 정리 작업을 없애지 않는다. 완료된 작업의 최소 결과는 토큰 만료 후 정리한다.
 
 Cron은 10분마다 유지관리 함수를 호출하는 기본안이다. 호출 비밀은 서버/Vault에 저장한다. 재시도는 1분·5분·30분·2시간 이후로 지연시키고 계속 실패하면 운영 확인 대상으로 남긴다. 작업 lease 만료 시 다른 실행이 이어 처리한다.
 
-미완료 정리는 `uploading / failed`, 마감 시각 경과, 보관 시각 없음이라는 조건을 DB에서 확인한 뒤 대상을 확보한다. `ready` 파일은 실험 기간·미선택 여부와 관계없이 정리 대상이 아니다.
+미완료 업로드는 `uploading / failed`, 업로드 예약 기한 경과 조건으로 정리한다. 정상 파일은 첫 메모가 없고 `ready_at + 24 hours`가 지난 경우 또는 두 번째 메모가 없고 `first_note_at + 48 hours`가 지난 경우 정리한다. 이미 보관된 사진은 실험 만료와 별도로 유지한다.
 
 ## 11. 설정과 관측
 
@@ -388,7 +400,9 @@ Cron은 10분마다 유지관리 함수를 호출하는 기본안이다. 호출 
 | `SUPABASE_SERVER_SECRET_KEY` | 서버 변경 전용 비밀 키, 배포 환경에서 SDK 호환 키 사용 |
 | `APP_BASE_URL` | Auth 콜백의 허용 주소 |
 | `TRIAL_DURATION_HOURS` | 48, 새 실험 생성 시 DB에 복사 |
-| `MAX_PHOTOS_PER_USER` | 20, 기존·보관·미선택·예약 합계 한도 |
+| `FIRST_NOTE_HOURS` | 24, 업로드 확정 뒤 첫 메모 기한 |
+| `SECOND_NOTE_HOURS` | 48, 첫 메모 저장 뒤 두 번째 메모 기한 |
+| `MAX_PHOTOS_PER_USER` | 20, 기존·보관·미선택·휴지통·예약 합계 한도 |
 | `MAX_FILES_PER_BATCH` | 10 |
 | `MAX_IMAGE_BYTES` | 10485760, 10 MiB |
 | `MAX_IMAGE_PIXELS` | 40000000 |
@@ -416,7 +430,8 @@ DB 백업과 객체 파일 백업은 별개다. 보관 약속을 운영하는 �
 | 메모 저장 응답 유실 | 현재 내용·버전 재조회, 동일 저장 중복 보관 방지 |
 | 두 기기 동시 수정 | 409, 두 내용을 보여 주고 사용자가 선택 |
 | 만료 직전 업로드 | 확정 시 DB 시간으로 재확인 |
-| 기간 이후 메모 | 저장 허용, 실험 이후 행동으로 분리 |
+| 메모 기한 초과 | 저장을 거절하고 사진·메모를 삭제 대기열에 넣음 |
+| 실험 종료 후 메모 | 해당 사진의 메모 기한 안이면 저장 허용 |
 | URL 만료 | 새 접근 권한 확인 후 재발급 |
 | 사용자 A의 ID를 B가 요청 | 404 또는 권한 차단, DB·Storage에서도 거절 |
 | 삭제 작업 실패 | 조회 차단 유지, 재시도·운영 확인 |
@@ -450,7 +465,9 @@ Next.js 16.4.0, React 19.3.0, Supabase JS 2.117.3, SSR 0.12.7, CLI 2.120.0의 �
 
 5개 테이블·제약·인덱스·최소 GRANT·RLS·비공개 버킷·서버 전용 SECURITY INVOKER 함수의 원본 SQL을 작성했다. profile → trial → photo 순서로 잠그며 메모 수정과 삭제를 직렬화한다. 검증 실패·만료 경계의 업로드 정리는 DB 결과로 커밋하여 예외 롤백 때문에 정리 요청이 사라지지 않게 했다. 네트워크 오류는 업로드 lease를 반환하고 재시도를 허용한다.
 
-삭제 요청은 즉시 새 조회와 저장을 차단하지만 이미 발급된 업로드 토큰이 파일을 재생성하지 않도록 객체 제거를 약 2시간까지 지연할 수 있다. 계정 삭제는 사진 작업을 기다리고 DB 정리·Auth 제거까지 성공한 뒤 완료한다. 진행 확인 토큰은 탭 sessionStorage에 24시간까지 두며 서버에는 해시만 저장한다. 유지관리 Edge Function은 기존 Supabase 프로젝트에 배포했고 `pg_cron`·`pg_net` 확장도 활성화했다. 2026-10-10에 내부 호출 비밀과 10분 Cron을 설정해 자동 작업이 같은 운영 DB에서 실행된다. 함수는 런타임 제공 `SUPABASE_SECRET_KEYS`를 사용한다.
+계정 삭제와 미완료 업로드 정리는 새 접근을 차단한다. 이미 발급된 업로드 토큰이 파일을 재생성하지 않도록 미완료 객체 제거를 약 2시간까지 지연할 수 있다. 계정 삭제는 사진 작업을 기다리고 DB 정리·Auth 제거까지 성공한 뒤 완료한다. 진행 확인 토큰은 탭 sessionStorage에 24시간까지 두며 서버에는 해시만 저장한다. 유지관리 Edge Function은 기존 Supabase 프로젝트에 배포했고 `pg_cron`·`pg_net` 확장도 활성화했다. 2026-10-10에 내부 호출 비밀과 10분 Cron을 설정해 자동 작업이 같은 운영 DB에서 실행된다. 함수는 런타임 제공 `SUPABASE_SECRET_KEYS`를 사용한다.
+
+2026-10-12 로컬 변경은 사진 삭제를 사용자 화면에서 숨기는 소프트 삭제로 바꿨다. 변경 migration은 공유 Supabase DB에 아직 적용하지 않았고 앱/Worker도 배포하지 않았으므로 현재 원격 동작은 바뀌지 않았다. 새 삭제 흐름은 미검증이며 `ROADMAP.md` 30절을 기준으로 한다.
 
 후속 작업에서 npm 접속과 Docker 접근이 복구됐다. `package-lock.json` 생성과 `npm ci`, lint·전체 typecheck·단위 테스트 8개·Next.js 운영 빌드가 통과했다. 이후 모바일 소개와 합성 사진 업로드·보관/ZIP E2E 2개까지 통과했다. Sharp 0.35.5·Vitest 4.1.11로 보안 패치를 반영했으며 운영 의존성 audit은 0건이다. Cloudflare Workers + vinext 설정을 추가했고 vinext 호환성 검사·Worker typecheck·Worker 빌드는 통과했다. 전체 개발·빌드 의존성 감사의 12건(중간 4, 높음 8)은 남아 있다.
 

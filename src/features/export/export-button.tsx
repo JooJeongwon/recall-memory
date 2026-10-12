@@ -23,7 +23,7 @@ export function ExportButton({ id }: { id: string }) {
       const url = URL.createObjectURL(new Blob([new Uint8Array(archive)], { type: "application/zip" }));
       const link = document.createElement("a"); link.href = url; link.download = `memory-${id}.zip`;
       document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setMessage("사진과 메모 ZIP을 만들었어요. 다운로드 파일을 확인해주세요.");
+      setMessage("사진과 두 메모가 담긴 ZIP을 만들었어요. 다운로드 파일을 확인해주세요.");
       void requestApi("/api/events", { method: "POST", body: JSON.stringify({ name: "export_generated", photo_id: id,
         client_event_id: crypto.randomUUID(), visit_context: "unknown" }) }).catch(() => {});
     } catch (e) { setMessage(e instanceof Error ? e.message : "다시 시도해주세요."); }

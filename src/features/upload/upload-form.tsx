@@ -49,6 +49,7 @@ export function UploadForm() {
   return <><label htmlFor="photos">다시 보고 싶은 사진</label><input id="photos" type="file" multiple
     accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(e) => select(e.target.files)} />
     <p>JPEG·PNG·정적 WebP를 지원해요. HEIC는 변환 후 선택해주세요.</p>
+    <p>사진 업로드 완료 후 24시간 안에 첫 메모를, 첫 메모 후 48시간 안에 두 번째 메모를 남겨야 사진과 두 메모가 유지돼요. 기한을 넘기면 함께 삭제돼요.</p>
     <p>원본에 촬영 위치 등 EXIF 정보가 포함될 수 있어요. 원본은 비공개로 보관하고 화면용 사진에서는 EXIF를 제거해요.</p>
     <p>확정되지 않은 업로드는 24시간 후 정리할 수 있어요.</p>
     <p role="status">{message}</p><ul aria-live="polite">{items.map((item) => <li key={item.requestId}>{item.file.name}: {item.status}</li>)}</ul>

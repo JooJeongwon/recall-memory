@@ -21,7 +21,8 @@ export function MemoryList() {
   return <><p role="status">{message}</p><div className="grid">{photos.map((photo) => <article className="card" key={photo.id}>
     <MemoryThumbnail key={`${photo.id}:${retry}`} id={photo.id} />
     <Link href={`/photos/${photo.id}`} prefetch={false}>사진 열기</Link>
-    <p>{photo.note_text || "메모를 비워도 사진은 보관되어 있어요."}</p>
+    <p>첫 번째 메모: {photo.note_text || "(비어 있음)"}</p>
+    <p>두 번째 메모: {photo.second_note_text || "(비어 있음)"}</p>
     <time dateTime={photo.preserved_at!}>{new Date(photo.preserved_at!).toLocaleDateString("ko-KR")}</time>
   </article>)}</div><button className="secondary" onClick={() => setRetry((v) => v + 1)}>다시 불러오기</button></>;
 }

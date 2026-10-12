@@ -1,5 +1,5 @@
--- db:prepare로 Supabase CLI가 생성한 최초 migration에 복사합니다.
--- 확정된 정상 사진은 만료를 이유로 삭제하지 않습니다.
+-- 최신 전체 스키마. 적용 이력은 supabase/migrations의 개별 파일을 따릅니다.
+-- 두 단계 메모 기한을 넘긴 정상 사진은 유지관리 작업으로 삭제합니다.
 create table public.profiles (
   user_id uuid primary key references auth.users(id) on delete restrict,
   timezone text not null default 'Asia/Seoul',
@@ -23,7 +23,7 @@ create table public.photos (
   user_id uuid not null references public.profiles(user_id) on delete restrict,
   trial_id uuid not null,
   client_request_id uuid not null,
-  lifecycle text not null default 'uploading' check (lifecycle in ('uploading','ready','failed','deleting','deleted')),
+  lifecycle text not null default 'uploading' check (lifecycle in ('uploading','ready','failed','deleting','deleted','soft_deleted')),
   original_key text not null unique,
   thumbnail_key text unique,
   original_name text not null,
@@ -31,7 +31,9 @@ create table public.photos (
   byte_size bigint not null check (byte_size > 0 and byte_size <= 10485760),
   width integer, height integer,
   note_text text not null default '' check (char_length(note_text) <= 500),
+  second_note_text text not null default '' check (char_length(second_note_text) <= 500),
   preserved_at timestamptz, first_note_at timestamptz, first_viewed_at timestamptz,
+  second_note_at timestamptz,
   version integer not null default 1 check (version > 0),
   upload_deadline_at timestamptz not null default (now() + interval '24 hours'),
   validation_token uuid, validation_until timestamptz,
@@ -39,8 +41,11 @@ create table public.photos (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   unique (user_id, client_request_id), unique (id, user_id),
   foreign key (trial_id, user_id) references public.trials(id, user_id) on delete restrict,
-  check ((preserved_at is null and first_note_at is null and note_text = '') or
-    (preserved_at is not null and first_note_at is not null)),
+  check (first_note_at is not null or (note_text = '' and second_note_at is null)),
+  check (second_note_at is not null or second_note_text = ''),
+  check ((preserved_at is null) = (second_note_at is null)),
+  check (second_note_at is null or first_note_at is not null),
+  constraint photos_soft_deleted_timestamp_check check (lifecycle <> 'soft_deleted' or delete_requested_at is not null),
   check (lifecycle <> 'ready' or (ready_at is not null and thumbnail_key is not null and
     width is not null and height is not null and width > 0 and height > 0 and width::bigint * height::bigint <= 40000000))
 );
@@ -59,7 +64,7 @@ create table public.cleanup_jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles(user_id) on delete set null,
   photo_id uuid references public.photos(id) on delete set null,
-  kind text not null check (kind in ('photo_delete','account_delete','incomplete_upload')),
+  kind text not null check (kind in ('photo_delete','account_delete','incomplete_upload','retention_expired')),
   dedupe_key text not null unique,
   status text not null default 'pending' check (status in ('pending','running','retry','done','failed')),
   attempts integer not null default 0 check (attempts >= 0),
@@ -74,6 +79,8 @@ create index photos_revisit on public.photos(user_id, lifecycle, ready_at, id);
 create index photos_memories on public.photos(user_id, preserved_at desc, id) where preserved_at is not null and lifecycle = 'ready';
 create index photos_trial on public.photos(trial_id, user_id);
 create index photos_incomplete on public.photos(upload_deadline_at) where lifecycle in ('uploading','failed');
+create index photos_first_note_deadline on public.photos(ready_at) where lifecycle in ('ready','soft_deleted') and first_note_at is null and preserved_at is null;
+create index photos_second_note_deadline on public.photos(first_note_at) where lifecycle in ('ready','soft_deleted') and first_note_at is not null and second_note_at is null and preserved_at is null;
 create index events_user on public.events(user_id, occurred_at);
 create index events_trial on public.events(trial_id, user_id);
 create index events_photo on public.events(photo_id, user_id);
@@ -125,7 +132,7 @@ create policy memory_assets_reserved_upload on storage.objects for insert to aut
 );
 
 create function public.app_policy() returns jsonb language sql immutable security invoker set search_path = '' as $$
-  select jsonb_build_object('trialHours',48,'maxPhotos',20,'maxBatch',10,'maxBytes',10485760,
+  select jsonb_build_object('trialHours',48,'firstNoteHours',24,'secondNoteHours',48,'maxPhotos',20,'maxBatch',10,'maxBytes',10485760,
     'maxPixels',40000000,'noteLength',500,'reservationHours',24,'bucket','memory-assets');
 $$;
 
@@ -190,11 +197,15 @@ begin
   perform 1 from public.profiles where user_id = p_user_id for update;
   select * into p from public.photos where id = p_photo_id and user_id = p_user_id for update;
   if not found then raise exception 'NOT_FOUND'; end if;
-  if p_kind not in ('photo_delete','incomplete_upload') then raise exception 'INVALID_INPUT'; end if;
+  if p_kind not in ('photo_delete','incomplete_upload','retention_expired') then raise exception 'INVALID_INPUT'; end if;
   select * into j from public.cleanup_jobs where dedupe_key = 'photo:' || p.id::text;
   if found then return j; end if;
   if p.lifecycle = 'deleted' then return null; end if;
   if p_kind = 'incomplete_upload' and (p.lifecycle not in ('uploading','failed') or p.preserved_at is not null) then raise exception 'PHOTO_NOT_READY'; end if;
+  if p_kind = 'retention_expired' and (p.lifecycle not in ('ready','soft_deleted') or p.preserved_at is not null or not (
+    (p.first_note_at is null and p.ready_at <= clock_timestamp() - interval '24 hours') or
+    (p.first_note_at is not null and p.second_note_at is null and p.first_note_at <= clock_timestamp() - interval '48 hours')
+  )) then raise exception 'PHOTO_NOT_READY'; end if;
   update public.photos set lifecycle = 'deleting', delete_requested_at = clock_timestamp(), version = version + 1, updated_at = clock_timestamp() where id = p.id;
   -- 이미 발급한 업로드 토큰(2시간)이 파일을 재생성하지 못하도록 여유를 둡니다.
   insert into public.cleanup_jobs(user_id,photo_id,kind,dedupe_key,run_after)
@@ -203,6 +214,34 @@ begin
       case when p.ready_at is null then clock_timestamp() + interval '2 hours 5 minutes' else p.ready_at + interval '2 hours 5 minutes' end,
       coalesce(p.validation_until,clock_timestamp()) + interval '5 minutes')) returning * into j;
   return j;
+end;
+$$;
+
+create function public.soft_delete_photo(p_user_id uuid,p_photo_id uuid) returns void
+language plpgsql security invoker set search_path = '' as $$
+declare p public.photos;
+begin
+  perform public.ensure_profile(p_user_id);
+  select * into p from public.photos where id = p_photo_id and user_id = p_user_id for update;
+  if not found then raise exception 'NOT_FOUND'; end if;
+  if p.lifecycle = 'soft_deleted' then return; end if;
+  if p.lifecycle <> 'ready' then raise exception 'PHOTO_NOT_READY'; end if;
+  update public.photos set lifecycle = 'soft_deleted',delete_requested_at = clock_timestamp(),
+    version = version + 1,updated_at = clock_timestamp() where id = p.id;
+end;
+$$;
+
+create function public.restore_photo(p_user_id uuid,p_photo_id uuid) returns void
+language plpgsql security invoker set search_path = '' as $$
+declare p public.photos;
+begin
+  perform public.ensure_profile(p_user_id);
+  select * into p from public.photos where id = p_photo_id and user_id = p_user_id for update;
+  if not found then raise exception 'NOT_FOUND'; end if;
+  if p.lifecycle = 'ready' then return; end if;
+  if p.lifecycle <> 'soft_deleted' then raise exception 'PHOTO_NOT_READY'; end if;
+  update public.photos set lifecycle = 'ready',delete_requested_at = null,
+    version = version + 1,updated_at = clock_timestamp() where id = p.id;
 end;
 $$;
 
@@ -260,24 +299,39 @@ begin
 end;
 $$;
 
-create function public.save_note(p_user_id uuid,p_photo_id uuid,p_note_text text,p_expected_version integer,p_request_id uuid)
+create function public.save_note(p_user_id uuid,p_photo_id uuid,p_note_text text,p_expected_version integer,p_request_id uuid,p_note_stage text)
 returns jsonb language plpgsql security invoker set search_path = '' as $$
-declare p public.photos; note text; ts timestamptz;
+declare p public.photos; note text; ts timestamptz; stage text; current_note text; stage_saved_at timestamptz;
 begin
   perform public.ensure_profile(p_user_id);
   select * into p from public.photos where id = p_photo_id and user_id = p_user_id for update;
   if not found then raise exception 'NOT_FOUND'; end if;
   if p.lifecycle <> 'ready' then raise exception 'PHOTO_NOT_READY'; end if;
+  if p_note_stage is null or p_note_stage not in ('first','second') then raise exception 'INVALID_INPUT'; end if;
+  ts := clock_timestamp();
+  if (p.first_note_at is null and ts >= p.ready_at + interval '24 hours') or
+    (p.first_note_at is not null and p.second_note_at is null and ts >= p.first_note_at + interval '48 hours') then
+    perform public.queue_photo_delete(p_user_id,p_photo_id,'retention_expired');
+    return jsonb_build_object('error','PHOTO_EXPIRED');
+  end if;
+  stage := p_note_stage;
+  if stage = 'second' and p.first_note_at is null then raise exception 'INVALID_INPUT'; end if;
   note := btrim(p_note_text, E' \t\n\r\f' || chr(11) || chr(160) || chr(5760) || chr(8192) || chr(8193) || chr(8194) || chr(8195) || chr(8196) || chr(8197) || chr(8198) || chr(8199) || chr(8200) || chr(8201) || chr(8202) || chr(8232) || chr(8233) || chr(8239) || chr(8287) || chr(12288) || chr(65279));
   if note is null or char_length(note) > 500 or (note = '' and p.preserved_at is null) then raise exception 'INVALID_INPUT'; end if;
+  current_note := case when stage = 'first' then p.note_text else p.second_note_text end;
+  stage_saved_at := case when stage = 'first' then p.first_note_at else p.second_note_at end;
   if p.version <> p_expected_version then
-    if p.note_text = note and p.preserved_at is not null then return to_jsonb(p); end if;
+    if current_note = note and stage_saved_at is not null then return to_jsonb(p); end if;
     return jsonb_build_object('error','VERSION_CONFLICT','current',to_jsonb(p));
   end if;
-  if p.note_text = note and p.preserved_at is not null then return to_jsonb(p); end if;
-  ts := clock_timestamp();
-  update public.photos set note_text = note,preserved_at = coalesce(preserved_at,ts),
-    first_note_at = coalesce(first_note_at,ts),version = version + 1,updated_at = ts where id = p.id returning * into p;
+  if current_note = note and stage_saved_at is not null then return to_jsonb(p); end if;
+  if stage = 'first' then
+    update public.photos set note_text = note,first_note_at = coalesce(first_note_at,ts),
+      version = version + 1,updated_at = ts where id = p.id returning * into p;
+  else
+    update public.photos set second_note_text = note,second_note_at = coalesce(second_note_at,ts),
+      preserved_at = coalesce(preserved_at,ts),version = version + 1,updated_at = ts where id = p.id returning * into p;
+  end if;
   -- 분석 오류가 기능 저장을 롤백하지 않습니다.
   begin
     if (select analytics_consent from public.profiles where user_id = p_user_id) then
@@ -373,8 +427,8 @@ begin
   if not found then raise exception 'INVALID_INPUT'; end if;
   if p_success then
     if j.photo_id is not null then
-      update public.photos set lifecycle = 'deleted',note_text = '',original_name = '',deleted_at = clock_timestamp(),
-        updated_at = clock_timestamp(),preserved_at = null,first_note_at = null,validation_token = null,validation_until = null
+      update public.photos set lifecycle = 'deleted',note_text = '',second_note_text = '',original_name = '',deleted_at = clock_timestamp(),
+        updated_at = clock_timestamp(),preserved_at = null,first_note_at = null,second_note_at = null,validation_token = null,validation_until = null
       where id = j.photo_id and lifecycle = 'deleting';
     end if;
     update public.cleanup_jobs set status = 'done',finished_at = clock_timestamp(),error_code = null,
@@ -397,6 +451,14 @@ begin
     upload_deadline_at < clock_timestamp() and preserved_at is null order by user_id,id limit 20 loop
     -- queue 함수가 잠금 뒤 조건을 다시 확인합니다.
     begin perform public.queue_photo_delete(p.user_id,p.id,'incomplete_upload');
+    exception when others then null; end;
+  end loop;
+  for p in select * from public.photos where lifecycle in ('ready','soft_deleted') and preserved_at is null and (
+    (first_note_at is null and ready_at <= clock_timestamp() - interval '24 hours') or
+    (first_note_at is not null and second_note_at is null and first_note_at <= clock_timestamp() - interval '48 hours')
+  ) order by user_id,id limit 20 loop
+    -- 잠금 뒤에도 기한을 확인해 저장과 만료 작업이 겹쳐도 늦은 삭제를 막습니다.
+    begin perform public.queue_photo_delete(p.user_id,p.id,'retention_expired');
     exception when others then null; end;
   end loop;
   delete from public.cleanup_jobs where status = 'done' and kind = 'account_delete' and progress_expires_at < clock_timestamp();
@@ -424,7 +486,7 @@ declare f record;
 begin
   for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname in ('app_policy','ensure_profile','me_state','reserve_uploads',
-      'queue_photo_delete','claim_upload','release_upload','complete_upload','save_note','mark_viewed','set_preferences',
+      'queue_photo_delete','soft_delete_photo','restore_photo','claim_upload','release_upload','complete_upload','save_note','mark_viewed','set_preferences',
       'record_event','request_account_delete','claim_cleanup','defer_cleanup','finish_cleanup','sweep_incomplete','purge_account_data') loop
     execute format('revoke all on function %s from public, anon, authenticated',f.signature);
     execute format('grant execute on function %s to service_role',f.signature);

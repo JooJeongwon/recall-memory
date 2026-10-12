@@ -152,6 +152,8 @@ export type Database = {
           lifecycle: string
           mime_type: string
           note_text: string
+          second_note_at: string | null
+          second_note_text: string
           original_key: string
           original_name: string
           preserved_at: string | null
@@ -179,6 +181,8 @@ export type Database = {
           lifecycle?: string
           mime_type: string
           note_text?: string
+          second_note_at?: string | null
+          second_note_text?: string
           original_key: string
           original_name: string
           preserved_at?: string | null
@@ -206,6 +210,8 @@ export type Database = {
           lifecycle?: string
           mime_type?: string
           note_text?: string
+          second_note_at?: string | null
+          second_note_text?: string
           original_key?: string
           original_name?: string
           preserved_at?: string | null
@@ -407,6 +413,10 @@ export type Database = {
         Args: { p_photo_id: string; p_token: string; p_user_id: string }
         Returns: undefined
       }
+      restore_photo: {
+        Args: { p_photo_id: string; p_user_id: string }
+        Returns: undefined
+      }
       request_account_delete: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: {
@@ -441,6 +451,7 @@ export type Database = {
         Args: {
           p_expected_version: number
           p_note_text: string
+          p_note_stage: string
           p_photo_id: string
           p_request_id: string
           p_user_id: string
@@ -464,6 +475,10 @@ export type Database = {
         }
       }
       sweep_incomplete: { Args: never; Returns: undefined }
+      soft_delete_photo: {
+        Args: { p_photo_id: string; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -3,6 +3,7 @@ import { formats, policy } from "../config";
 
 export const uuid = z.uuid();
 export const noteInput = z.object({
+  note_stage: z.enum(["first", "second"]),
   note_text: z.string().transform((value) => value.trim())
     .refine((value) => [...value].length <= policy.noteLength, "메모는 500자까지 남길 수 있어요."),
   expected_version: z.number().int().positive(),
@@ -33,10 +34,10 @@ export const eventInput = z.object({
 
 // API 응답 계약입니다. DB 타입은 db:types로 실제 스키마에서 생성합니다.
 export const photoSchema = z.object({
-  id: uuid, note_text: z.string(), version: z.number(),
+  id: uuid, note_text: z.string(), second_note_text: z.string(), second_note_at: z.string().nullable(), version: z.number(),
   original_name: z.string(), mime_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
   byte_size: z.number(), ready_at: z.string(), preserved_at: z.string().nullable(),
   first_note_at: z.string().nullable(), first_viewed_at: z.string().nullable(),
 });
 export type Photo = z.infer<typeof photoSchema>;
-export const photoColumns = "id,note_text,version,original_name,mime_type,byte_size,ready_at,preserved_at,first_note_at,first_viewed_at";
+export const photoColumns = "id,note_text,second_note_text,second_note_at,version,original_name,mime_type,byte_size,ready_at,preserved_at,first_note_at,first_viewed_at";

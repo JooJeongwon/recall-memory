@@ -11,6 +11,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return endpoint(async () => { const job = await rpc("queue_photo_delete", { p_photo_id: uuid.parse(id) }); return json({ job_id: job?.id ?? null, status: job?.status ?? "done" }, job ? 202 : 200); })(request);
+  return endpoint(async () => { await rpc("soft_delete_photo", { p_photo_id: uuid.parse(id) }); return json({ status: "deleted" }); })(request);
 }
 import { uuid } from "@/lib/validation/contracts";

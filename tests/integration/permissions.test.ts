@@ -104,7 +104,7 @@ it("업로드 예약 중복·한도·소유자 전송과 최초 실험 시각을
     .toBe(startedTrial.data!.duration_hours * 60 * 60 * 1_000);
 });
 
-it("메모 길이 경계와 최초 보관 시각, 소유자 원본 접근을 확인한다", async () => {
+it("두 메모 길이 경계와 보관 시각, 소유자 원본 접근을 확인한다", async () => {
   const { admin } = fixture;
   const userIds = users.map((user) => user.id);
   const sessions = users.map((user) => user.client);
@@ -113,22 +113,23 @@ it("메모 길이 경계와 최초 보관 시각, 소유자 원본 접근을 확
   const startedTrial = await admin.from("trials").select("ends_at").eq("user_id", userIds[0]).single();
   expect(startedTrial.error).toBeNull();
   const emptyFirstNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: " \n ", p_expected_version: 1, p_request_id: crypto.randomUUID() });
+    p_note_stage: "first", p_note_text: " \n ", p_expected_version: 1, p_request_id: crypto.randomUUID() });
   expect(emptyFirstNote.error?.message).toBe("INVALID_INPUT");
   const maxLengthNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "📷".repeat(500), p_expected_version: 1, p_request_id: crypto.randomUUID() });
+    p_note_stage: "first", p_note_text: "📷".repeat(500), p_expected_version: 1, p_request_id: crypto.randomUUID() });
   expect(maxLengthNote.error).toBeNull();
   expect(maxLengthNote.data).toMatchObject({ note_text: "📷".repeat(500), version: 2 });
   const overLengthNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "📷".repeat(501), p_expected_version: 2, p_request_id: crypto.randomUUID() });
+    p_note_stage: "first", p_note_text: "📷".repeat(501), p_expected_version: 2, p_request_id: crypto.randomUUID() });
   expect(overLengthNote.error?.message).toBe("INVALID_INPUT");
   const saved = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "합성 사진 보관 확인", p_expected_version: 2, p_request_id: crypto.randomUUID() });
+    p_note_stage: "second", p_note_text: "합성 사진 보관 확인", p_expected_version: 2, p_request_id: crypto.randomUUID() });
   expect(saved.error).toBeNull();
-  const ownPhoto = await sessions[0].from("photos").select("note_text,preserved_at").eq("id", photoId);
+  const ownPhoto = await sessions[0].from("photos").select("note_text,second_note_text,preserved_at").eq("id", photoId);
   expect(ownPhoto.error).toBeNull();
   expect(ownPhoto.data).toHaveLength(1);
-  expect(ownPhoto.data?.[0].note_text).toBe("합성 사진 보관 확인");
+  expect(ownPhoto.data?.[0].note_text).toBe("📷".repeat(500));
+  expect(ownPhoto.data?.[0].second_note_text).toBe("합성 사진 보관 확인");
   expect(ownPhoto.data?.[0].preserved_at).not.toBeNull();
   const firstNote = await admin.from("photos").select("first_note_at").eq("id", photoId).single();
   expect(firstNote.error).toBeNull();
@@ -152,7 +153,10 @@ it("만료 뒤 업로드 거절·기존 사진 보관과 미완료 업로드 정
   const { photo, original, originalKey } = await fixture.readyPhoto(users[0]);
   const photoId = photo.id;
   expect((await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "합성 사진 보관 확인", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+    p_note_stage: "first", p_note_text: "합성 사진 보관 확인", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+  expect((await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
+    p_note_stage: "second", p_note_text: "두 번째 합성 메모", p_expected_version: photo.version + 1,
+    p_request_id: crypto.randomUUID() })).error).toBeNull();
   const firstNote = await admin.from("photos").select("first_note_at").eq("id", photoId).single();
   expect(firstNote.error).toBeNull();
   const lateNote = await fixture.readyPhoto(users[0]);
@@ -211,12 +215,16 @@ it("만료 뒤 업로드 거절·기존 사진 보관과 미완료 업로드 정
   expect(lateClaim.error).toBeNull();
   expect(lateClaim.data).toMatchObject({ error: "TRIAL_ENDED" });
   const lateFirstNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: lateNotePhotoId,
-    p_note_text: "기간 종료 후 처음 보관한 합성 사진", p_expected_version: 1, p_request_id: crypto.randomUUID() });
+    p_note_stage: "first", p_note_text: "기간 종료 후 첫 메모", p_expected_version: 1, p_request_id: crypto.randomUUID() });
   expect(lateFirstNote.error).toBeNull();
-  expect(lateFirstNote.data).toMatchObject({ note_text: "기간 종료 후 처음 보관한 합성 사진" });
+  expect(lateFirstNote.data).toMatchObject({ note_text: "기간 종료 후 첫 메모" });
+  const lateSecondNote = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: lateNotePhotoId,
+    p_note_stage: "second", p_note_text: "기간 종료 후 두 번째 메모", p_expected_version: 2,
+    p_request_id: crypto.randomUUID() });
+  expect(lateSecondNote.error).toBeNull();
   const lateFirstNoteAt = Date.parse((lateFirstNote.data as { first_note_at: string }).first_note_at);
   expect(lateFirstNoteAt).toBeGreaterThan(Date.parse(endsAt));
-  expect(Date.parse((lateFirstNote.data as { preserved_at: string }).preserved_at)).toBeGreaterThan(Date.parse(endsAt));
+  expect(Date.parse((lateSecondNote.data as { preserved_at: string }).preserved_at)).toBeGreaterThan(Date.parse(endsAt));
   const deletingPhotos = await admin.from("photos").select("lifecycle")
     .in("id", [pendingPhotoId, lateClaimPhotoId]);
   expect(deletingPhotos.data).toHaveLength(2);
@@ -247,7 +255,7 @@ it("만료 뒤 업로드 거절·기존 사진 보관과 미완료 업로드 정
   const currentVersion = version.data?.version;
   if (!currentVersion) throw new Error("Photo version missing after preservation");
   const savedAfterExpiry = await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "기간이 끝나도 기존 사진은 이용할 수 있어요", p_expected_version: currentVersion,
+    p_note_stage: "first", p_note_text: "기간이 끝나도 기존 사진은 이용할 수 있어요", p_expected_version: currentVersion,
     p_request_id: crypto.randomUUID() });
   expect(savedAfterExpiry.error).toBeNull();
   const stillPreserved = await sessions[0].from("photos").select("lifecycle,note_text,preserved_at")
@@ -261,14 +269,14 @@ it("만료 뒤 업로드 거절·기존 사진 보관과 미완료 업로드 정
   expect(Buffer.from(await afterExpiryAsset.data!.arrayBuffer()).equals(original)).toBe(true);
 });
 
-it("보관 사진 삭제의 중복 방지와 Storage 제거 후 완료를 확인한다", async () => {
+it("내부 사진 정리 큐의 중복 방지와 Storage 제거 후 완료를 확인한다", async () => {
   const { admin } = fixture;
   const userIds = users.map((user) => user.id);
   const sessions = users.map((user) => user.client);
   const { photo, originalKey, thumbnailKey } = await fixture.readyPhoto(users[0]);
   const photoId = photo.id;
   expect((await admin.rpc("save_note", { p_user_id: userIds[0], p_photo_id: photoId,
-    p_note_text: "삭제할 합성 보관 사진", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+    p_note_stage: "first", p_note_text: "삭제할 합성 보관 사진", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
   const deleteRequest = await admin.rpc("queue_photo_delete", { p_user_id: userIds[0], p_photo_id: photoId });
   expect(deleteRequest.error).toBeNull();
   const cleanupJobId = (deleteRequest.data as { id: string }).id;
@@ -293,11 +301,12 @@ it("보관 사진 삭제의 중복 방지와 Storage 제거 후 완료를 확인
     p_job_id: cleanupJobId, p_lease_token: leaseToken, p_success: true,
   });
   expect(finishDelete.error).toBeNull();
-  const deletedPhoto = await admin.from("photos").select("lifecycle,note_text,original_name,preserved_at,first_note_at")
+  const deletedPhoto = await admin.from("photos").select("lifecycle,note_text,second_note_text,second_note_at,original_name,preserved_at,first_note_at")
     .eq("id", photoId).single();
   expect(deletedPhoto.error).toBeNull();
   expect(deletedPhoto.data).toMatchObject({
-    lifecycle: "deleted", note_text: "", original_name: "", preserved_at: null, first_note_at: null,
+    lifecycle: "deleted", note_text: "", second_note_text: "", second_note_at: null,
+    original_name: "", preserved_at: null, first_note_at: null,
   });
   const finishedJob = await admin.from("cleanup_jobs").select("status,user_id,photo_id,dedupe_key")
     .eq("id", cleanupJobId).single();
@@ -346,9 +355,10 @@ it("파일 삭제 실패 뒤 재시도와 이전 lease 거절을 확인한다", 
   expect((await admin.rpc("finish_cleanup", {
     p_job_id: retryCleanupJobId, p_lease_token: secondLease, p_success: true,
   })).error).toBeNull();
-  const retryPhoto = await admin.from("photos").select("lifecycle,note_text,preserved_at")
+  const retryPhoto = await admin.from("photos").select("lifecycle,note_text,second_note_text,second_note_at,preserved_at")
     .eq("id", lateNotePhotoId).single();
-  expect(retryPhoto.data).toMatchObject({ lifecycle: "deleted", note_text: "", preserved_at: null });
+  expect(retryPhoto.data).toMatchObject({ lifecycle: "deleted", note_text: "", second_note_text: "",
+    second_note_at: null, preserved_at: null });
   expect((await admin.from("cleanup_jobs").select("status").eq("id", retryCleanupJobId).single()).data?.status)
     .toBe("done");
 });

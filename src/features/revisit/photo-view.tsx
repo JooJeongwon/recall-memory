@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { requestApi } from "@/lib/api";
 import { photoSchema, type Photo } from "@/lib/validation/contracts";
 import { NoteEditor } from "./note-editor";
@@ -11,6 +12,8 @@ export function PhotoView({ id, detail = false }: { id: string; detail?: boolean
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
   const [retry, setRetry] = useState(0);
+  const [deletedId, setDeletedId] = useState("");
+  const deleted = deletedId === id;
   useEffect(() => {
     let active = true;
     async function load() {
@@ -21,7 +24,11 @@ export function PhotoView({ id, detail = false }: { id: string; detail?: boolean
     }
     void load(); return () => { active = false; };
   }, [id, retry]);
-  return <>{message && <><p className="error" role="alert">{message}</p><button onClick={() => setRetry((v) => v + 1)}>다시 불러오기</button></>}
+  return deleted ? <>
+    <p role="status">사진과 메모를 삭제했어요. 일반 화면에서는 더 이상 보이지 않습니다.</p>
+    <Link href="/memories">보관함으로 돌아가기</Link>
+  </> : <>
+    {message && <><p className="error" role="alert">{message}</p><button onClick={() => setRetry((v) => v + 1)}>다시 불러오기</button></>}
     {photo && url ? <>
       {/* 비공개 URL을 Next 이미지 최적화 캐시에 넣지 않습니다. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -34,6 +41,7 @@ export function PhotoView({ id, detail = false }: { id: string; detail?: boolean
           }) }).catch(() => {});
         }} />
       <NoteEditor key={id} photo={photo} onSaved={setPhoto} />
-      {detail && <div className="actions"><ExportButton id={id} /><DeletePhoto id={id} /></div>}
-    </> : !message && <p role="status">사진을 불러오는 중…</p>}</>;
+      {detail && <div className="actions"><ExportButton id={id} /><DeletePhoto id={id} onDeleted={() => setDeletedId(id)} /></div>}
+    </> : !message && <p role="status">사진을 불러오는 중…</p>}
+  </>;
 }

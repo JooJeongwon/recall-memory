@@ -2,6 +2,8 @@
 export const policy = {
   bucket: "memory-assets",
   trialHours: 48,
+  firstNoteHours: 24,
+  secondNoteHours: 48,
   maxPhotos: 20,
   maxBatch: 10,
   maxBytes: 10 * 1024 * 1024,

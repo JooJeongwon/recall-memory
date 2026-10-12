@@ -43,7 +43,8 @@ for (const [path, endpoint] of [["/revisit", "/api/photos?limit=20"], ["/memorie
       let latest = false;
       await page.route(`**${endpoint}`, async (route) => {
         if (!latest) { held.push(route); return; }
-        await route.fulfill({ json: { photos: [{ ...photo, preserved_at: photo.ready_at, note_text: "최신 목록" }] } });
+        await route.fulfill({ json: { photos: [{ ...photo, preserved_at: photo.ready_at, note_text: "최신 목록",
+          second_note_text: "", second_note_at: null }] } });
       });
       await page.goto(path);
       await expect.poll(() => held.length).toBeGreaterThan(0);
@@ -168,8 +169,11 @@ test("업로드 거절·재시도·사진 탐색과 최초 보관·ZIP 원본을
   await previous.click();
   await expect(page.getByText("1번째 사진 / 2장")).toBeVisible();
   await page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?").fill("다시 만난 순간을 기억해요.");
-  await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
+  await page.getByRole("button", { name: "첫 번째 메모 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "첫 번째 메모를 저장했어요." })).toBeVisible();
+  await page.getByLabel("두 번째 메모").fill("그날의 마음을 한 번 더 적어요.");
+  await page.getByRole("button", { name: "두 번째 메모 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "두 메모와 사진을 보관함에 남겼어요." })).toBeVisible();
 
   let failThumbnailOnce = true;
   const thumbnailRoute = /\/api\/photos\/[^/]+\/asset$/;
@@ -198,7 +202,8 @@ test("업로드 거절·재시도·사진 탐색과 최초 보관·ZIP 원본을
   const archive = unzipSync(archiveBytes);
   expect(Buffer.from(archive["original.png"]!).equals(original)).toBe(true);
   expect(JSON.parse(strFromU8(archive["memory.json"]!))).toMatchObject({
-    schema_version: 1, original_name: "synthetic.png", note_text: "다시 만난 순간을 기억해요.",
+    schema_version: 2, original_name: "synthetic.png", note_text: "다시 만난 순간을 기억해요.",
+    second_note_text: "그날의 마음을 한 번 더 적어요.",
   });
 });
 
@@ -210,19 +215,23 @@ test("메모 동시 수정·저장 실패의 초안 보존·재시도와 비우�
   await page.goto(`/photos/${ready.photo.id}`);
   await expect(page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?")).toBeVisible();
   const concurrentSave = await admin.rpc("save_note", { p_user_id: userId, p_photo_id: currentPhoto.id,
-    p_note_text: "다른 곳에서 먼저 저장한 메모", p_expected_version: currentPhoto.version,
+    p_note_stage: "first", p_note_text: "다른 곳에서 먼저 저장한 메모", p_expected_version: currentPhoto.version,
     p_request_id: crypto.randomUUID() });
   expect(concurrentSave.error).toBeNull();
   await page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?").fill("작성 중인 메모는 유지되어야 해요.");
-  await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
+  await page.getByRole("button", { name: "첫 번째 메모 저장" }).click();
   await expect(page.getByRole("status").filter({ hasText: "다른 곳에서 수정된 메모가 있어요." })).toBeVisible();
   await expect(page.getByText("다른 곳에서 먼저 저장한 메모")).toBeVisible();
   const noteInput = page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?");
   await expect(noteInput).toHaveValue("작성 중인 메모는 유지되어야 해요.");
   await page.getByRole("button", { name: "내 입력으로 다시 저장 준비" }).click();
   await expect(noteInput).toHaveValue("작성 중인 메모는 유지되어야 해요.");
-  await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
+  await page.getByRole("button", { name: "첫 번째 메모 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "첫 번째 메모를 저장했어요." })).toBeVisible();
+  const secondNoteInput = page.getByLabel("두 번째 메모");
+  await secondNoteInput.fill("두 번째 메모로 보관을 확정해요.");
+  await page.getByRole("button", { name: "두 번째 메모 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "두 메모와 사진을 보관함에 남겼어요." })).toBeVisible();
 
   await noteInput.fill("고쳐 쓴 뒤 비워도 사진은 남아요.");
   const noteRoute = /\/api\/photos\/[^/]+\/note$/;
@@ -235,19 +244,19 @@ test("메모 동시 수정·저장 실패의 초안 보존·재시도와 비우�
       }) });
     } else await route.continue();
   });
-  await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
+  await page.getByRole("button", { name: "첫 번째 메모 저장" }).click();
   await expect(page.getByRole("status").filter({ hasText: "잠시 후 다시 시도해주세요." })).toBeVisible();
   await expect(noteInput).toHaveValue("고쳐 쓴 뒤 비워도 사진은 남아요.");
   const unchanged = await admin.from("photos").select("note_text").eq("id", currentPhoto.id).single();
   expect(unchanged.data?.note_text).toBe("작성 중인 메모는 유지되어야 해요.");
   await page.unroute(noteRoute);
   const noteSave = page.waitForResponse((response) => response.url().includes("/note") && response.request().method() === "PUT" && response.ok());
-  await Promise.all([noteSave, page.getByRole("button", { name: "메모와 함께 남기기" }).click()]);
-  await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
+  await Promise.all([noteSave, page.getByRole("button", { name: "첫 번째 메모 저장" }).click()]);
+  await expect(page.getByRole("status").filter({ hasText: "첫 번째 메모를 저장했어요." })).toBeVisible();
   await page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?").fill("");
   const clearNote = page.waitForResponse((response) => response.url().includes("/note") && response.request().method() === "PUT" && response.ok());
-  await Promise.all([clearNote, page.getByRole("button", { name: "메모와 함께 남기기" }).click()]);
-  await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
+  await Promise.all([clearNote, page.getByRole("button", { name: "첫 번째 메모 저장" }).click()]);
+  await expect(page.getByRole("status").filter({ hasText: "첫 번째 메모를 저장했어요." })).toBeVisible();
 });
 
 test("만료 후 보관함과 ZIP 원본 전송 실패·연결 단절의 재시도를 확인한다", async ({ page }) => {
@@ -255,9 +264,11 @@ test("만료 후 보관함과 ZIP 원본 전송 실패·연결 단절의 재시�
   const userId = user.id;
   const { photo, original } = await fixture.readyPhoto(user);
   expect((await admin.rpc("save_note", { p_user_id: userId, p_photo_id: photo.id,
-    p_note_text: "합성 보관 메모", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+    p_note_stage: "first", p_note_text: "합성 보관 메모", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
   expect((await admin.rpc("save_note", { p_user_id: userId, p_photo_id: photo.id,
-    p_note_text: "", p_expected_version: photo.version + 1, p_request_id: crypto.randomUUID() })).error).toBeNull();
+    p_note_stage: "second", p_note_text: "보관을 확정하는 두 번째 메모", p_expected_version: photo.version + 1, p_request_id: crypto.randomUUID() })).error).toBeNull();
+  expect((await admin.rpc("save_note", { p_user_id: userId, p_note_text: "", p_photo_id: photo.id,
+    p_note_stage: "first", p_expected_version: photo.version + 2, p_request_id: crypto.randomUUID() })).error).toBeNull();
   const endsAt = new Date(Date.parse(photo.ready_at) - 1_000).toISOString();
   const startedAt = new Date(Date.parse(endsAt) - policy.trialHours * 60 * 60 * 1_000).toISOString();
   expect((await admin.from("trials").update({ started_at: startedAt, ends_at: endsAt }).eq("user_id", userId)).error).toBeNull();
@@ -265,7 +276,7 @@ test("만료 후 보관함과 ZIP 원본 전송 실패·연결 단절의 재시�
     trial_state: "ended", can_upload: false,
   });
   await page.goto("/memories");
-  await expect(page.getByText("메모를 비워도 사진은 보관되어 있어요.")).toBeVisible();
+  await expect(page.getByText("첫 번째 메모: (비어 있음)")).toBeVisible();
   await page.getByRole("link", { name: "사진 열기" }).click();
   const exportRoute = /\/api\/photos\/[^/]+\/export$/;
   let exportPreparations = 0;
@@ -314,7 +325,7 @@ test("만료 후 보관함과 ZIP 원본 전송 실패·연결 단절의 재시�
     exportButton.click(),
   ]);
   expect(exportPreparations).toBe(3);
-  await expect(page.getByRole("status").filter({ hasText: "사진과 메모 ZIP을 만들었어요." })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "사진과 두 메모가 담긴 ZIP을 만들었어요." })).toBeVisible();
   const updatedPath = await updatedDownload.path();
   expect(updatedPath).not.toBeNull();
   const updatedArchive = unzipSync(await readFile(updatedPath!));
@@ -343,8 +354,10 @@ test("분석 동의·철회와 이후 이벤트 미기록을 확인한다", asyn
 
   await page.goto(`/photos/${photo.id}`);
   await page.getByLabel("이 순간에서 무엇을 기억하고 싶나요?").fill("동의 뒤 남긴 합성 메모");
-  await page.getByRole("button", { name: "메모와 함께 남기기" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "사진과 글을 보관함에 남겼어요." })).toBeVisible();
+  await page.getByRole("button", { name: "첫 번째 메모 저장" }).click();
+  await page.getByLabel("두 번째 메모").fill("두 번째 동의 메모");
+  await page.getByRole("button", { name: "두 번째 메모 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "두 메모와 사진을 보관함에 남겼어요." })).toBeVisible();
   const currentPhoto = photo;
   const consentedEvents = await admin.from("events").select("name").eq("user_id", userId).eq("photo_id", currentPhoto.id);
   expect(consentedEvents.error).toBeNull();
@@ -370,30 +383,40 @@ test("분석 동의·철회와 이후 이벤트 미기록을 확인한다", asyn
   expect((await admin.from("events").select("id").eq("user_id", userId)).data).toEqual([]);
 });
 
-test("보관 사진 삭제 접수·접근 차단과 계정 삭제 진행 상태를 확인한다", async ({ page }) => {
+test("사진 삭제는 일반 화면에서 숨기고 복구 데이터를 남기며 계정 삭제를 처리한다", async ({ page }) => {
   const { admin } = fixture;
   const userId = user.id;
-  const { photo } = await fixture.readyPhoto(user);
+  const { photo, originalKey } = await fixture.readyPhoto(user);
   expect((await admin.rpc("save_note", { p_user_id: userId, p_photo_id: photo.id,
-    p_note_text: "삭제할 합성 보관 사진", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+    p_note_stage: "first", p_note_text: "삭제할 합성 보관 사진", p_expected_version: photo.version, p_request_id: crypto.randomUUID() })).error).toBeNull();
+  expect((await admin.rpc("save_note", { p_user_id: userId, p_photo_id: photo.id,
+    p_note_stage: "second", p_note_text: "보관을 확정하는 두 번째 메모", p_expected_version: photo.version + 1,
+    p_request_id: crypto.randomUUID() })).error).toBeNull();
   const currentPhoto = photo;
   await page.goto(`/photos/${photo.id}`);
   await expect(page.getByRole("img", { name: "선택한 기억 사진" })).toBeVisible();
   page.once("dialog", (dialog) => {
-    expect(dialog.message()).toBe("사진과 메모가 함께 삭제됩니다. 필요하면 먼저 가져가세요. 삭제할까요?");
+    expect(dialog.message()).toBe("사진과 메모가 화면에서 삭제됩니다. 데이터는 복구를 위해 서비스에 보관됩니다. 계속할까요?");
     void dialog.accept();
   });
   const photoDelete = page.waitForResponse((response) => new URL(response.url()).pathname ===
     `/api/photos/${currentPhoto.id}` && response.request().method() === "DELETE");
   await page.getByRole("button", { name: "사진 삭제" }).click();
-  expect((await photoDelete).status()).toBe(202);
-  await expect(page.getByRole("status").filter({ hasText: "삭제 요청을 접수했어요. 파일 삭제가 진행 중이에요." })).toBeVisible();
-  expect((await admin.from("photos").select("lifecycle,preserved_at").eq("id", currentPhoto.id).single()).data)
-    .toMatchObject({ lifecycle: "deleting" });
+  expect((await photoDelete).status()).toBe(200);
+  await expect(page.getByRole("status").filter({ hasText: "사진과 메모를 삭제했어요. 일반 화면에서는 더 이상 보이지 않습니다." })).toBeVisible();
+  await expect(page.getByRole("img", { name: "선택한 기억 사진" })).toHaveCount(0);
+  const softDeletedPhoto = await admin.from("photos").select("lifecycle,note_text,second_note_text,preserved_at,delete_requested_at")
+    .eq("id", currentPhoto.id).single();
+  expect(softDeletedPhoto.data).toMatchObject({ lifecycle: "soft_deleted", note_text: "삭제할 합성 보관 사진",
+    second_note_text: "보관을 확정하는 두 번째 메모" });
+  expect(softDeletedPhoto.data?.preserved_at).not.toBeNull();
+  expect(softDeletedPhoto.data?.delete_requested_at).not.toBeNull();
   const photoDeleteJobs = await admin.from("cleanup_jobs").select("id,kind,status")
     .eq("photo_id", currentPhoto.id).eq("dedupe_key", `photo:${currentPhoto.id}`);
-  expect(photoDeleteJobs.data).toHaveLength(1);
-  expect(photoDeleteJobs.data?.[0]).toMatchObject({ kind: "photo_delete", status: "pending" });
+  expect(photoDeleteJobs.data).toEqual([]);
+  expect((await admin.storage.from(policy.bucket).download(originalKey)).error).toBeNull();
+  expect((await user.client.from("photos").select("id").eq("id", currentPhoto.id)).data).toEqual([]);
+  expect((await user.client.storage.from(policy.bucket).download(originalKey)).error).not.toBeNull();
   expect(await page.evaluate(async (id) => (await fetch(`/api/photos/${id}`)).status, currentPhoto.id)).toBe(404);
 
   await page.goto("/settings");

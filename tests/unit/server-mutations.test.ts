@@ -15,7 +15,7 @@ import { requireUser } from "../../src/lib/server/auth";
 const userId = "e5fceea3-7635-4b3c-84fd-183d9806f999";
 const id = "a9762e02-d9f1-4b59-9e14-e9f2050a03be";
 const token = "c2904681-3d72-4c5b-91a4-be9a897379b0";
-const photo = { id, note_text: "", version: 1, original_name: "synthetic.png", mime_type: "image/png",
+const photo = { id, note_text: "", second_note_text: "", second_note_at: null, version: 1, original_name: "synthetic.png", mime_type: "image/png",
   byte_size: 3, ready_at: "2026-10-10T00:00:00Z", preserved_at: null, first_note_at: null, first_viewed_at: null };
 const auth = { user: { id: userId }, supabase: { auth: { signOut: mocks.signOut } } } as unknown as Awaited<ReturnType<typeof requireUser>>;
 

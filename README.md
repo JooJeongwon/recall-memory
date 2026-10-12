@@ -1,6 +1,6 @@
 # 기억할 권리
 
-사진을 다시 보고 한 줄 메모와 함께 보관하는 모바일 웹앱입니다. 정책은 [PROJECT.md](PROJECT.md), API·DB 계약은 [ARCHITECTURE.md](ARCHITECTURE.md), 검증 상태는 [ROADMAP.md](ROADMAP.md)를 기준으로 합니다.
+사진을 다시 보고 기한 안에 두 메모를 남겨 보관하는 모바일 웹앱입니다. 정책은 [PROJECT.md](PROJECT.md), API·DB 계약은 [ARCHITECTURE.md](ARCHITECTURE.md), 검증 상태는 [ROADMAP.md](ROADMAP.md)를 기준으로 합니다.
 
 ## 현재 상태
 
@@ -47,7 +47,7 @@ Google OAuth를 사용할 때는 Google Authorized redirect URI를 Supabase 프�
 
 ## DB 변경과 타입
 
-최초 migration은 [supabase/migrations/20261008045831_initial_schema.sql](supabase/migrations/20261008045831_initial_schema.sql)입니다. `supabase/schema.sql`은 최초 원본이며 후속 변경은 새 migration으로 남깁니다. `db:prepare`는 최초 파일을 생성한 작업이므로 다시 실행할 필요가 없습니다.
+최초 migration은 [supabase/migrations/20261008045831_initial_schema.sql](supabase/migrations/20261008045831_initial_schema.sql)입니다. `supabase/schema.sql`은 최신 전체 스키마이며 후속 변경은 새 migration으로 남깁니다. `db:prepare`는 최초 파일을 생성한 작업이므로 다시 실행할 필요가 없습니다. 사진 소프트 삭제와 두 단계 메모 기한 migration은 각각 `20261012024618_photo_soft_delete.sql`, `20261012024626_note_retention_checkpoints.sql`입니다. 기한 migration은 기존 `preserved_at`을 해제하고 저장된 메모를 첫 메모로 취급합니다. 기존 사진에도 새 기한을 소급 적용하므로 이미 기한이 지난 사진은 Cron 실행 때 삭제 대기열에 들어갑니다. 적용 후 `npm run db:types`로 타입을 다시 생성해야 합니다.
 
 `db:types`는 `.env.local`의 `SUPABASE_PROJECT_ID`로 지정한 원격 프로젝트에서 [src/types/database.ts](src/types/database.ts)를 생성합니다. Supabase CLI 로그인이 필요합니다. 최초 연결에서는 Supabase 플러그인의 실제 프로젝트 타입 생성 기능도 사용할 수 있습니다.
 
@@ -64,7 +64,7 @@ npm run typecheck
 
 [supabase/functions/maintenance](supabase/functions/maintenance/index.ts)은 같은 Supabase 프로젝트에 배포되며 인증 없는 POST가 `401`을 반환합니다. Supabase는 함수 런타임에 `SUPABASE_URL`과 `SUPABASE_SECRET_KEYS`를 제공하므로 별도 서버 키를 함수 secret으로 복사하지 않습니다 ([환경변수 문서](https://supabase.com/docs/guides/functions/secrets)). `pg_cron`·`pg_net`은 활성화되어 `extensions` schema에 있습니다. `MAINTENANCE_CALL_SECRET`은 Supabase API 키와 별개인 내부 Cron 인증 비밀이며, 같은 값을 Edge Function secret과 Vault의 `recall_maintenance_secret`에 저장합니다. `recall_project_url`에는 프로젝트 URL을 저장합니다. 2026-10-10에 등록한 `recall-maintenance` 일정은 10분마다 실행 중이며 HTTP 200을 반환하는 것을 확인했습니다. 이 일정도 공유 운영 DB를 처리합니다. `supabase/cron.sql`은 프로젝트마다 한 번만 적용합니다. Supabase 관리형 `cron` 테이블 권한은 변경하지 않고 `cron.schedule()`로 등록합니다.
 
-정상 `ready` 사진은 자동 정리 대상이 아닙니다. 사용자 삭제, 검증 실패, 24시간 지난 미완료 업로드만 정리합니다. 이미 발급된 업로드 토큰이 파일을 다시 만들지 못하도록 객체 제거에 약 2시간의 대기 시간을 둡니다. 실제 파일 제거 전에는 “삭제 중”을 표시합니다. 합성 데이터로 미완료 업로드의 Storage 제거와 사용자 삭제 후 Storage·DB·Auth 전체 제거를 검증했습니다. 운영 상태와 큐·사진·버킷 용량을 수치만으로 조회하는 읽기 전용 SQL은 [supabase/operations.sql](supabase/operations.sql)에 있습니다.
+2026-10-12 코드 변경: 첫 메모는 사진 업로드 완료 뒤 24시간, 두 번째 메모는 첫 메모 저장 뒤 48시간 안에 남겨야 사진과 두 메모가 유지됩니다. 기한이 지나면 `retention_expired` 작업으로 원본·썸네일·메모를 함께 정리하고 파일 삭제 실패는 기존 재시도 큐를 사용합니다. 기존 사진도 소급 대상입니다. migration은 기존 보관 표시를 초기화하고 현재 저장 메모를 첫 메모로 간주하므로 두 번째 메모 시각이 없는 과거 사진은 첫 메모 시각에서 48시간이 이미 지났다면 바로 삭제 대기 상태가 됩니다. 사진 상세 화면과 ZIP에는 두 메모를 표시·포함합니다. 새 migration은 아직 공유 원격 DB에 적용하지 않았고 앱/Worker도 배포하지 않았습니다. 정상 `ready` 사진의 사용자 삭제는 기존 미커밋 변경대로 `soft_deleted`로 바꿔 사용자 화면에서 숨기며 복구 데이터는 계정 삭제나 미완료 메모 기한이 충족될 때까지 DB·Storage에 남습니다. 계정 삭제는 파일과 DB 행을 실제로 제거합니다. 24시간 지난 미완료 업로드도 실제 정리 대상이며, 이미 발급된 업로드 권한이 끝나도록 객체 제거를 약 2시간 늦춥니다. 운영 상태와 큐·사진·버킷 용량을 수치만으로 조회하는 읽기 전용 SQL은 [supabase/operations.sql](supabase/operations.sql)에 있습니다.
 
 ## 검증
 
@@ -80,8 +80,8 @@ npm run build
 
 Vitest와 Playwright는 `.env.local`을 읽습니다. `SUPABASE_ENVIRONMENT=production`이면 통합/E2E fixture 생성을 거부합니다. 통합 검증은 앱 DB와 분리된 프로젝트 ID와 HTTPS URL이 정확히 일치해야 실행됩니다. 합성 이미지와 가상 메모만 사용합니다. E2E는 Chromium의 새 headless 방식을 사용하고 trace·사진·동영상 기록은 비활성화합니다.
 
-현재 E2E는 빈 목록·요청 재시도, HEIC·10 MiB 초과 사전 거절, Storage 전송 실패 후 재시도, 사진 탐색, 보관·ZIP 흐름, 설정 동의·철회와 삭제 요청 UI를 확인합니다. 원격 통합 테스트는 두 사용자 권한 분리, 예약 중복·한도, 만료 경계, 메모 길이·동시성, 삭제 큐·Storage API 제거·완료·lease 재시도를 확인합니다. 합성 데이터로 실제 유지관리 함수를 호출해 미완료 업로드 파일 제거와 계정의 파일·프로필·메모·Auth 삭제를 확인했습니다. 실제 Storage 장애 후 재시도, 로그아웃 후 재로그인, 실제 48시간 경과, 기존 DB upgrade는 추가 확인이 필요합니다. Google OAuth는 개발 환경에서 로그인에 성공했고, 콜백이 시작한 주소를 유지하도록 수정했습니다. P1 전체 완료와 MVP 완료는 표시하지 않았습니다.
+기존 검증 E2E와 원격 통합 테스트는 이전 한 메모 보관 정책을 기준으로 했습니다. 새 두 단계 메모·24/48시간 기한·소급 정리는 아직 검증하지 않았고, 이번 변경에서 테스트를 실행하지 않았습니다. 기존 미완료 업로드 파일 정리와 계정 전체 정리는 합성 데이터로 확인했습니다. 실제 Storage 장애 후 재시도, 로그아웃 후 재로그인, 실기기·운영 OAuth, 기존 DB upgrade는 추가 확인이 필요합니다. Google OAuth는 개발 환경에서 로그인에 성공했고, 콜백이 시작한 주소를 유지하도록 수정했습니다. P1 전체 완료와 MVP 완료는 표시하지 않았습니다.
 
 2026-10-10 모바일 Chromium E2E에서 사진 목록 API와 ZIP 원본 스트림의 연결 단절 안내·재시도 후 복구를 확인했습니다. 실제 iOS·Android 기기와 느린 네트워크 검증은 남아 있습니다.
 
-2026-10-10 원격 통합 테스트에서 `sweep_incomplete()`이 기한 지난 `uploading`·`failed`만 정리 큐에 넣고, 기한 지난 `ready` 보관·미보관 사진은 유지하는 것을 확인했습니다. 별도의 합성 worker 검증에서 Storage 제거와 계정 전체 삭제까지 완료했습니다. 실제 24시간 벽시계 경과 검증은 남아 있습니다.
+2026-10-10 원격 통합 테스트에서 당시 `sweep_incomplete()`이 기한 지난 `uploading`·`failed`만 정리 큐에 넣고, `ready` 사진은 유지하는 것을 확인했습니다. 2026-10-12 migration은 `ready`·`soft_deleted` 사진의 첫·두 번째 메모 기한도 정리하며 아직 검증하지 않았습니다. 별도의 합성 worker 검증에서 Storage 제거와 계정 전체 삭제까지 완료했습니다. 실제 기한 경과 및 새 규칙의 DB 경계 검증은 남아 있습니다.
