@@ -49,14 +49,6 @@ export function UploadForm() {
     setDoneCount(0);
   }
 
-  function removeItem(requestId: string) {
-    setItems((curr) => {
-      const item = curr.find((i) => i.requestId === requestId);
-      if (item) URL.revokeObjectURL(item.preview);
-      return curr.filter((i) => i.requestId !== requestId);
-    });
-  }
-
   function update(requestId: string, status: string, done = false, error = false) {
     setItems((curr) =>
       curr.map((item) => item.requestId === requestId ? { ...item, status, done, error } : item)
@@ -132,7 +124,7 @@ export function UploadForm() {
         </div>
 
         <div className="upload-status-list">
-          {items.map((item, i) => {
+          {items.map((item) => {
             const isDone = item.done;
             const isActive = !item.done && !item.error && item.status !== "선택됨";
             const stageLabel = item.error
@@ -184,6 +176,25 @@ export function UploadForm() {
             <p style={{ fontSize: ".8rem", color: "var(--c-muted)", textAlign: "center" }}>
               업로드가 완료될 때까지 앱을 닫지 마세요.
             </p>
+          </div>
+        )}
+        {!allDone && !busy && items.some((i) => i.error) && (
+          <div style={{ marginTop: 24, display: "flex", gap: 10, flexDirection: "column" }}>
+            <button
+              className="coral"
+              onClick={() => void upload()}
+            >
+              실패한 항목 다시 시도
+            </button>
+            <button
+              className="ghost"
+              onClick={() => {
+                items.forEach((i) => URL.revokeObjectURL(i.preview));
+                setItems([]); setDoneCount(0); setUploading(false); setBusy(false);
+              }}
+            >
+              처음부터 다시 선택
+            </button>
           </div>
         )}
       </>
