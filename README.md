@@ -1,5 +1,13 @@
 # 기억할 권리
 
+## Vercel QR 방문 통계
+
+QR에 넣을 주소는 `https://recall-memory-smoky.vercel.app/qr`, 관리자 화면은 `https://recall-memory-smoky.vercel.app/admin/analytics`다. 관리자 로그인 후 설정에도 통계 링크가 나타난다. `main`의 방문 통계 기능을 Next.js/Vercel에 맞춰 복원하며 기존 Supabase의 관리자 2명·방문 테이블·집계 RPC·90일 보관 규칙을 그대로 사용한다. DB schema/migration/Cron/환경변수는 변경하지 않는다.
+
+QR은 `/?source=qr`로 이동하고 30분 방문 세션의 출처를 이후 화면에도 유지한다. 일반 주소를 담은 기존 QR은 직접 방문과 구분할 수 없다. 개발·localhost·자동 브라우저·관리자 통계 화면·OAuth callback·DNT/GPC·알려진 봇은 수집에서 제외한다. 계정 연결은 기존 동의 규칙을 따르며 사진·메모·파일명·이메일·원문 URL·IP는 방문 테이블에 저장하지 않는다. Vercel 요청 제한은 인스턴스별 분당 120건이며 인스턴스 간 공유되지 않는다.
+
+검증 명령: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npx playwright test --config playwright.analytics.config.ts`. 로컬의 실제 Supabase 합성 방문/계정 검증은 QR 저장, 이벤트 중복 방지, DNT/GPC/봇 제외, 외부 Origin·민감 필드 거절, 미로그인 401·비관리자 403, 기존 관리자 RPC의 집계 응답 계약을 통과했다. 로컬 수집 제외 규칙 때문에 브라우저 수집 시나리오는 운영 URL에서 검증한다. 실제 관리자 Google 로그인은 자동 테스트에서 수행하지 않는다. 모든 합성 방문·계정은 테스트 종료 때 해당 ID만 정리한다.
+
 ## 2026-10-13 운영 호환성 검증
 
 `feat/frontend-seeun`의 Next.js 구성을 기존 Vercel `recall-memory` 프로젝트에서 유지한다. 이미 적용된 `note_retention_checkpoints`에 맞춰 첫 메모와 두 번째 메모를 분리하고, `first_note_at`으로 저장 단계를 선택한다. 보관 완료는 서버의 `preserved_at` 응답으로만 표시한다. 보관함·상세 수정에서 두 번째 메모를 읽고 저장하며, 개별·전체 ZIP의 `memory.json`에는 기존 `note_text`와 함께 `first_note_at`, `second_note_text`, `second_note_at`을 포함한다.

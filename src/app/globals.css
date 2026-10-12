@@ -1908,3 +1908,12 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
   .landing-photo-2 { height: 200px; }
   .landing-photo-3 { height: 138px; top: 218px; }
 }
+
+.analytics-dashboard h2 { margin-top: 24px; }
+.analytics-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+.analytics-summary div { padding: 12px; border: 1px solid var(--c-border); border-radius: 12px; }
+.analytics-summary dt { font-size: .8rem; }
+.analytics-summary dd { margin: 4px 0 0; font-size: 1.5rem; font-weight: 700; }
+.analytics-table { overflow-x: auto; }
+.analytics-table table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.analytics-table th, .analytics-table td { padding: 8px; border-bottom: 1px solid var(--c-border); text-align: left; }

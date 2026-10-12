@@ -14,6 +14,64 @@ export type Database = {
   }
   public: {
     Tables: {
+      visit_events: {
+        Row: {
+          actor: string
+          id: string
+          occurred_at: string
+          page: string
+          session_id: string
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          actor: string
+          id: string
+          occurred_at?: string
+          page: string
+          session_id: string
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          actor?: string
+          id?: string
+          occurred_at?: string
+          page?: string
+          session_id?: string
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      analytics_administrators: {
+        Row: {
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_administrators_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       cleanup_jobs: {
         Row: {
           attempts: number
@@ -310,6 +368,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      record_visit: {
+        Args: {
+          p_event_id: string
+          p_page: string
+          p_session_id: string
+          p_source: string
+          p_user_id?: string
+        }
+        Returns: undefined
+      }
+      analytics_report: {
+        Args: { p_admin_id: string; p_days?: number }
+        Returns: Json
+      }
       app_policy: { Args: never; Returns: Json }
       claim_cleanup: {
         Args: never

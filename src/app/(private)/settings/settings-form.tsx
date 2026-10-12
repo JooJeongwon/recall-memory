@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { visitStorageKey } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { requestApi } from "@/lib/api";
@@ -8,6 +10,7 @@ import { isDemoMode } from "@/lib/demo";
 export function SettingsForm() {
   const router = useRouter();
   const [consent, setConsent] = useState(false);
+  const [canViewAnalytics, setCanViewAnalytics] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -25,8 +28,8 @@ export function SettingsForm() {
   }
 
   useEffect(() => {
-    requestApi<{ profile: { analytics_consent: boolean } }>("/api/me")
-      .then((me) => { setConsent(me.profile.analytics_consent); setLoaded(true); })
+    requestApi<{ profile: { analytics_consent: boolean }; can_view_analytics?: boolean }>("/api/me")
+      .then((me) => { setConsent(me.profile.analytics_consent); setCanViewAnalytics(!!me.can_view_analytics); setLoaded(true); })
       .catch((e: Error) => setMessage(e.message));
 
     if (!isDemoMode()) {
@@ -55,6 +58,7 @@ export function SettingsForm() {
       const { error } = await createClient().auth.signOut();
       if (error) { setMessage("로그아웃하지 못했어요. 다시 시도해주세요."); return; }
     }
+    try { sessionStorage.removeItem(visitStorageKey); } catch { /* 저장소 차단에도 로그아웃은 진행합니다. */ }
     router.replace("/login"); router.refresh();
   }
 
@@ -152,7 +156,7 @@ export function SettingsForm() {
           </div>
           <div className="settings-row-text">
             <strong>분석 데이터 사용 동의</strong>
-            <p>사진·메모·파일명은 포함하지 않아요.</p>
+            <p>동의하면 계정과 사용 행동을 연결해 분석해요. 사진·메모·파일명은 포함하지 않아요. 방문 횟수는 계정 연결 없이도 집계해요.</p>
           </div>
           <div className="settings-row-right">
             <div
@@ -235,6 +239,8 @@ export function SettingsForm() {
           </div>
         </div>
       </div>
+
+      {canViewAnalytics && <p><Link className="button" href="/admin/analytics">방문·사용자 통계</Link></p>}
 
       {message && (
         <p

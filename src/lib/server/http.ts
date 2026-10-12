@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
 const messages: Record<string, string> = {
+  FORBIDDEN: "통계 접근 권한이 없어요.",
   INVALID_INPUT: "입력 내용을 확인해주세요.", UNAUTHENTICATED: "다시 로그인해주세요.",
   ACCOUNT_DELETING: "계정 삭제가 진행 중이에요.", NOT_FOUND: "사진을 찾을 수 없어요.",
   VERSION_CONFLICT: "다른 곳에서 수정된 메모가 있어요.", TRIAL_ENDED: "사진을 추가하는 기간이 끝났어요.",
