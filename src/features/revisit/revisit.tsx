@@ -363,20 +363,6 @@ function ImmersivePhotoView({
           </p>
         )}
 
-        {saved && (
-          <div style={{ textAlign: "center", marginTop: 8 }}>
-            <Link
-              href={`/photos/${photo.id}`}
-              prefetch={false}
-              style={{
-                fontSize: ".76rem", color: "rgba(255,255,255,.4)",
-                borderBottom: "1px solid rgba(255,255,255,.15)", paddingBottom: 1,
-              }}
-            >
-              상세 보기
-            </Link>
-          </div>
-        )}
       </motion.div>
     </>
   );

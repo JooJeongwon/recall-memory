@@ -42,6 +42,10 @@ export function MemoryList() {
     setViewerIndex(null);
   }, []);
 
+  const handleSaved = useCallback((updated: Photo) => {
+    setPhotos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  }, []);
+
   if (message === "empty") {
     return (
       <motion.div
@@ -120,6 +124,7 @@ export function MemoryList() {
           initialIndex={viewerIndex}
           onClose={closeViewer}
           onDelete={handleDelete}
+          onSaved={handleSaved}
         />
       )}
     </>

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { requestApi } from "@/lib/api";
-import { type Photo } from "@/lib/validation/contracts";
+import { RequestError, requestApi } from "@/lib/api";
+import { photoSchema, type Photo } from "@/lib/validation/contracts";
 import { demoImage, isDemoMode } from "@/lib/demo";
 
 export function ViewerOverlay({
@@ -9,11 +9,13 @@ export function ViewerOverlay({
   initialIndex,
   onClose,
   onDelete,
+  onSaved,
 }: {
   photos: Photo[];
   initialIndex: number;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  onSaved?: (photo: Photo) => void;
 }) {
   const [index, setIndex] = useState(initialIndex);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -21,6 +23,22 @@ export function ViewerOverlay({
   const touchStartX = useRef<number | null>(null);
 
   const current = photos[index];
+
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(current?.note_text ?? "");
+  const [editVersion, setEditVersion] = useState(current?.version ?? 1);
+  const [localPhoto, setLocalPhoto] = useState<Photo | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
+  useEffect(() => {
+    setLocalPhoto(null);
+    setEditing(false);
+    setEditText(current?.note_text ?? "");
+    setEditVersion(current?.version ?? 1);
+    setSaveMsg("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
 
   /* Preload current + neighbors */
   useEffect(() => {
@@ -67,6 +85,41 @@ export function ViewerOverlay({
     if (dx > 0 && index > 0) setIndex((i) => i - 1);
   }, [index, photos.length]);
 
+  const effectivePhoto = localPhoto ?? current;
+  const dateLabel = effectivePhoto?.preserved_at
+    ? new Date(effectivePhoto.preserved_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+    : null;
+
+  async function handleSave() {
+    if (!effectivePhoto || isDemoMode()) return;
+    setSaveBusy(true);
+    setSaveMsg("");
+    try {
+      const result = photoSchema.parse(await requestApi(`/api/photos/${effectivePhoto.id}/note`, {
+        method: "PUT",
+        body: JSON.stringify({
+          note_text: editText,
+          expected_version: editVersion,
+          request_id: crypto.randomUUID(),
+        }),
+      }));
+      setLocalPhoto(result);
+      setEditText(result.note_text ?? "");
+      setEditVersion(result.version);
+      setEditing(false);
+      setSaveMsg("기억으로 남겼어요.");
+      onSaved?.(result);
+    } catch (error) {
+      if (error instanceof RequestError && error.code === "VERSION_CONFLICT") {
+        setSaveMsg("다른 기기에서 저장된 내용이 있어요. 새로고침 후 다시 시도해주세요.");
+      } else {
+        setSaveMsg(error instanceof Error ? error.message : "저장하지 못했어요.");
+      }
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
@@ -79,10 +132,6 @@ export function ViewerOverlay({
       onDelete?.(current.id);
     } catch { setDeleting(false); }
   }
-
-  const dateLabel = current?.preserved_at
-    ? new Date(current.preserved_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
-    : null;
 
   return (
     <div className="viewer-screen" aria-modal="true" role="dialog" aria-label="사진 전체 보기">
@@ -114,58 +163,70 @@ export function ViewerOverlay({
       </div>
 
       {/* Detail panel */}
-      {current && (
-        <div style={{
-          padding: "14px 20px 8px",
-          color: "#fff",
-          borderTop: "1px solid rgba(255,255,255,.08)",
-        }}>
+      {effectivePhoto && (
+        <div style={{ padding: "14px 20px 8px", color: "#fff", borderTop: "1px solid rgba(255,255,255,.08)" }}>
           {dateLabel && (
             <p style={{ fontSize: ".74rem", color: "rgba(255,255,255,.42)", marginBottom: 6, letterSpacing: ".02em" }}>
               {dateLabel}
             </p>
           )}
-          <p style={{
-            fontSize: ".9rem", lineHeight: 1.55, marginBottom: 12,
-            color: current.note_text ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.3)",
-            fontStyle: current.note_text ? "normal" : "italic",
-            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
-          }}>
-            {current.note_text || "메모가 없어요."}
-          </p>
+          {editing ? (
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              disabled={saveBusy}
+              placeholder="한 줄이어도 좋아요."
+              rows={3}
+              style={{
+                width: "100%", background: "rgba(255,255,255,.08)", color: "#fff",
+                border: "1px solid rgba(255,255,255,.2)", borderRadius: 8,
+                padding: "8px 10px", fontSize: ".88rem", lineHeight: 1.55,
+                resize: "vertical", marginBottom: 8, boxSizing: "border-box",
+              }}
+            />
+          ) : (
+            <p style={{
+              fontSize: ".9rem", lineHeight: 1.55, marginBottom: 12,
+              color: effectivePhoto.note_text ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.3)",
+              fontStyle: effectivePhoto.note_text ? "normal" : "italic",
+              display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+            }}>
+              {effectivePhoto.note_text || "메모가 없어요."}
+            </p>
+          )}
+          {saveMsg && (
+            <p style={{
+              fontSize: ".78rem", marginBottom: 8,
+              color: saveMsg.includes("못") || saveMsg.includes("있어요") ? "rgba(220,100,100,.9)" : "rgba(100,220,130,.9)",
+            }}>
+              {saveMsg}
+            </p>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
-            <a
-              href={`/photos/${current.id}/edit`}
+            <button
+              onClick={() => { setEditing(true); setEditText(effectivePhoto.note_text ?? ""); setSaveMsg(""); }}
               style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                height: 38, borderRadius: 10,
+                height: 38, borderRadius: 10, border: "none", cursor: "pointer",
                 background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)",
-                fontSize: ".8rem", fontWeight: 600, textDecoration: "none",
+                fontSize: ".8rem", fontWeight: 600,
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
               수정
-            </a>
+            </button>
             {!isDemoMode() && (
-              <a
-                href={`/api/photos/${current.id}/export/zip`}
+              <button
+                onClick={() => void handleSave()}
+                disabled={saveBusy}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  height: 38, borderRadius: 10,
+                  height: 38, borderRadius: 10, border: "none", cursor: saveBusy ? "not-allowed" : "pointer",
                   background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)",
-                  fontSize: ".8rem", fontWeight: 600, textDecoration: "none",
+                  fontSize: ".8rem", fontWeight: 600,
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                가져가기
-              </a>
+                {saveBusy ? "저장 중…" : "저장"}
+              </button>
             )}
             {!isDemoMode() && (
               <button
@@ -178,11 +239,6 @@ export function ViewerOverlay({
                   fontSize: ".8rem", fontWeight: 600,
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                  <path d="M10 11v6M14 11v6"/>
-                </svg>
                 {deleting ? "삭제 중…" : "삭제"}
               </button>
             )}
