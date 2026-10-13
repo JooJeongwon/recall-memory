@@ -31,6 +31,7 @@ test('QR 출처 저장·중복 방지·추적 거부·관리자 권한·통계 �
   expect((await db.from('visit_events').select('*',{count:'exact',head:true}).eq('session_id',session)).count).toBe(1);
   expect((await page.request.get('/api/admin/analytics')).status()).toBe(401);
   expect((await page.request.get('/api/admin/accounts')).status()).toBe(401);
+  expect((await page.request.get('/api/admin/logs/export')).status()).toBe(401);
   await page.goto('/admin/analytics');
   await expect(page).toHaveURL(/\/login$/);
   const created=await db.auth.admin.createUser({email:`qr-qa-${crypto.randomUUID()}@example.test`,password:'Aa1!'+crypto.randomUUID(),email_confirm:true});
@@ -50,6 +51,7 @@ test('QR 출처 저장·중복 방지·추적 거부·관리자 권한·통계 �
   expect((await me.json()).can_view_analytics).toBe(false);
   expect((await page.request.get('/api/admin/analytics')).status()).toBe(403);
   expect((await page.request.get('/api/admin/accounts')).status()).toBe(403);
+  expect((await page.request.get('/api/admin/logs/export')).status()).toBe(403);
   await page.goto('/admin/analytics');
   await expect(page.getByText('통계 접근 권한이 없어요.')).toBeVisible();
   const administrators=await db.from('analytics_administrators').select('user_id').limit(1);
@@ -95,3 +97,4 @@ test('운영 QR 브라우저 방문은 로그인 이동에도 같은 QR 세션�
   if(eventIds.length) expect((await db.from('visit_events').delete().in('id',eventIds)).error).toBeNull();
  }
 });
+

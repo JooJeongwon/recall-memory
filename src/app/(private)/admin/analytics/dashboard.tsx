@@ -11,6 +11,24 @@ export function AnalyticsDashboard() {
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [message, setMessage] = useState("통계를 불러오는 중이에요.");
   const [retry, setRetry] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  async function downloadLogs() {
+    setExporting(true); setExportMessage("엑셀 파일을 만들고 있어요.");
+    try {
+      const response = await fetch(`/api/admin/logs/export?days=${days}`, {cache: "no-store"});
+      if (!response.ok) {
+        const failure = await response.json();
+        throw new Error(failure.error?.message ?? "다운로드를 다시 시도해주세요.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a"); link.href = url;
+      link.download = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "recall-logs.xlsx";
+      link.click(); setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setExportMessage("엑셀 파일을 다운로드했어요.");
+    } catch (error) { setExportMessage(error instanceof Error ? error.message : "다시 시도해주세요."); }
+    finally { setExporting(false); }
+  }
   useEffect(() => {
     let active = true;
     requestApi(`/api/admin/analytics?days=${days}`).then((data) => {
@@ -26,6 +44,9 @@ export function AnalyticsDashboard() {
       <option value={1}>오늘</option><option value={7}>최근 7일</option><option value={30}>최근 30일</option><option value={90}>최근 90일</option>
     </select>
     <button className="ghost" onClick={() => setRetry((value) => value + 1)}>새로고침</button>
+    <button className="ghost" disabled={exporting} onClick={downloadLogs}>엑셀 로그 다운로드</button>
+    <p>선택한 기간의 활동·방문 기록과 전체 계정 현황을 내려받아요. 현재 남아 있는 방문 기록 전체는 최근 90일을 선택해주세요.</p>
+    <p role="status">{exportMessage}</p>
     <p role="status">{message}</p>
     {report && <>
       <p>{start}부터 조회 시점까지 · 관리자 계정의 로그인 방문 제외</p>
