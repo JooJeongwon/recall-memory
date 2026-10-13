@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { requestApi } from "@/lib/api";
 import { analyticsReportSchema, type AnalyticsReport } from "@/lib/analytics";
+import { AccountList } from "./account-list";
 
 const sources = { qr: "QR 표시 링크", direct: "직접/출처 없음", referral: "외부 링크", unknown: "출처 불명" };
 const actionNames: Record<string, string> = { trial_started: "사진 사용 시작", photo_viewed: "사진 다시 보기", note_saved: "메모 저장", memory_opened: "보관 사진 열기", export_generated: "ZIP 생성" };
@@ -50,6 +51,7 @@ export function AnalyticsDashboard() {
       <h2>현재 계정 현황</h2>
       <p>가입 계정 {report.registered_accounts} · 사진 사용 시작 계정 {report.participating_accounts} · 분석 동의 계정 {report.consented_accounts}</p>
       <p>이 수치는 방문 기간과 별개인 현재 DB의 계정 수예요. 계정 삭제에 따라 줄어들 수 있어요.</p>
+      <AccountList key={`${days}-${retry}`} days={days} />
       <h2>동의한 사용자의 행동</h2>
       <div className="analytics-table"><table><thead><tr><th scope="col">행동</th><th scope="col">기록 수</th><th scope="col">고유 계정</th></tr></thead>
         <tbody>{report.actions.map((row) => <tr key={row.name}><th scope="row">{actionNames[row.name] ?? row.name}</th><td>{row.events}</td><td>{row.accounts}</td></tr>)}</tbody>

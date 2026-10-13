@@ -1,5 +1,7 @@
 # 기억할 권리 웹앱 아키텍처 설계
 
+> 계정별 관리자 API: `GET /api/admin/accounts?days=7&page=1&page_size=20`는 기존 확인된 관리자 이메일과 DB `analytics_administrators` 명단을 모두 검사한 뒤 서버 전용 Auth Admin API로 페이지별 계정을 읽는다. 1~90일, 최대 50계정/페이지로 제한한다. 정상 사진의 보관/메모 시각과 분석 동의 계정의 이벤트 이름·시각만 조회하며 이벤트는 1,000건씩 끝까지 읽어 집계한다. Auth 원문·토큰·사진/메모 원문은 반환하지 않는다. `private, no-store` 응답을 사용하고 DB/migration/환경변수를 변경하지 않는다.
+
 > QR 통계 복원: `POST /api/analytics/visit`는 동일 출처·엄격한 입력·봇/DNT/GPC 제외 후 기존 `record_visit`를 사용한다. `/admin/analytics`와 `GET /api/admin/analytics`는 기존 두 관리자 이메일과 DB `analytics_administrators`/`analytics_report` 권한 검증을 유지한다. `/api/me`의 `can_view_analytics`로 설정에 관리자 링크를 표시한다. Cloudflare 전용 binding은 가져오지 않는다. Vercel 전달 IP는 일시적인 salted hash 제한 키로만 사용하며 함수 인스턴스당 IP별 분당 120건·최대 10,000키로 제한한다. 이 제한은 인스턴스 간 공유되지 않는다. 기존 DB/Cron/환경변수는 변경하지 않는다.
 
 > 2026-10-13 운영 API 호환성: 이미 적용된 `note_retention_checkpoints`의 `save_note`에 명시적인 `p_note_stage`를 전달한다. `first_note_at`이 없으면 `first`, 있으면 `second`를 사용한다. 첫 메모는 `note_text`/`first_note_at`, 두 번째는 `second_note_text`/`second_note_at`이며 보관의 기준은 여전히 `preserved_at IS NOT NULL`이다. 첫 메모만 저장한 사진을 보관으로 표시하지 않는다. 사진 조회와 개별·전체 ZIP에는 두 메모와 각 시각을 포함한다. 업로드 후 첫 메모 24시간, 첫 메모 후 두 번째 메모 48시간의 서버 제한이 초기 명세보다 우선한다. 기존 DB에 migration을 재실행하지 않는다.

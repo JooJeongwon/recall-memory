@@ -40,3 +40,16 @@ export const analyticsReportSchema = z.object({
   actions: z.array(z.object({ name: z.string(), events: z.number(), accounts: z.number() })),
 });
 export type AnalyticsReport = z.infer<typeof analyticsReportSchema>;
+
+export const accountUsageSchema = z.object({
+  id: z.uuid(), email: z.string().nullable(), administrator: z.boolean(),
+  created_at: z.string(), last_sign_in_at: z.string().nullable(),
+  account_state: z.string().nullable(), analytics_consent: z.boolean().nullable(),
+  photos: z.number(), preserved: z.number(), first_notes: z.number(), second_notes: z.number(),
+  actions: z.array(z.object({ name: z.string(), count: z.number(), last_at: z.string() })).nullable(),
+});
+export const accountReportSchema = z.object({
+  accounts: z.array(accountUsageSchema), page: z.number(), page_size: z.number(),
+  total: z.number(), next_page: z.number().nullable(), since: z.string(), until: z.string(), days: z.number(),
+});
+export type AccountReport = z.infer<typeof accountReportSchema>;

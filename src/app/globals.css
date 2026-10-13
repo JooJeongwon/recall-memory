@@ -1917,3 +1917,14 @@ body:has(.login-root) main { padding-bottom: 0 !important; padding-inline: 0 !im
 .analytics-table { overflow-x: auto; }
 .analytics-table table { width: 100%; border-collapse: collapse; font-size: .8rem; }
 .analytics-table th, .analytics-table td { padding: 8px; border-bottom: 1px solid var(--c-border); text-align: left; }
+.analytics-account-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 16px; }
+.analytics-account-card { border: 1px solid var(--c-border); border-radius: 12px; padding: 16px; }
+.analytics-account-card h3 { overflow-wrap: anywhere; font-size: .95rem; margin-bottom: 12px; }
+.analytics-admin-badge { display: inline-block; border-radius: 8px; background: var(--c-bg2); padding: 2px 6px; font-size: .7rem; }
+.analytics-account-meta { margin: 0 0 12px; font-size: .8rem; }
+.analytics-account-meta div { display: grid; grid-template-columns: 80px 1fr; gap: 8px; margin: 4px 0; }
+.analytics-account-meta dd { margin: 0; overflow-wrap: anywhere; }
+.analytics-account-card summary { cursor: pointer; font-weight: 600; }
+.analytics-account-actions { padding-left: 18px; font-size: .82rem; }
+.analytics-account-actions li { margin: 8px 0; }
+.analytics-account-pagination { display: flex; gap: 12px; }
